@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'providers/app_providers.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 import 'screens/dashboard_screen.dart';
@@ -13,13 +14,11 @@ import 'screens/profile_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // Status bar'ı şeffaf, açık ikonlarla
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
     statusBarBrightness: Brightness.dark,
   ));
-  // Sadece dikey yön
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -27,22 +26,22 @@ void main() {
   runApp(const ProviderScope(child: BorsaApp()));
 }
 
-class BorsaApp extends StatelessWidget {
+class BorsaApp extends ConsumerWidget {
   const BorsaApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locale = ref.watch(languageProvider);
     return MaterialApp(
       title: 'Borsa',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
+      locale: locale,
+      supportedLocales: const [Locale('tr'), Locale('en')],
       home: const MainShell(),
     );
   }
 }
-
-// ── Bottom nav state ────────────────────────────────────────────────────
-final _navIndexProvider = StateProvider<int>((_) => 0);
 
 class MainShell extends ConsumerWidget {
   const MainShell({super.key});
@@ -57,7 +56,7 @@ class MainShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final index = ref.watch(_navIndexProvider);
+    final index = ref.watch(navIndexProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
@@ -67,7 +66,7 @@ class MainShell extends ConsumerWidget {
       ),
       bottomNavigationBar: _BottomNav(
         currentIndex: index,
-        onTap: (i) => ref.read(_navIndexProvider.notifier).state = i,
+        onTap: (i) => ref.read(navIndexProvider.notifier).state = i,
       ),
     );
   }
@@ -80,16 +79,26 @@ class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.currentIndex, required this.onTap});
 
   static const _tabs = [
-    _TabItem(icon: Icons.account_balance_wallet_outlined,
-        activeIcon: Icons.account_balance_wallet, label: 'Cüzdan'),
-    _TabItem(icon: Icons.show_chart_outlined,
-        activeIcon: Icons.show_chart, label: 'İşlem'),
-    _TabItem(icon: Icons.history_outlined,
-        activeIcon: Icons.history, label: 'Geçmiş'),
-    _TabItem(icon: Icons.shield_outlined,
-        activeIcon: Icons.shield, label: 'Risk'),
-    _TabItem(icon: Icons.person_outline,
-        activeIcon: Icons.person, label: 'Profil'),
+    _TabItem(
+        icon: Icons.account_balance_wallet_outlined,
+        activeIcon: Icons.account_balance_wallet,
+        label: 'Cüzdan'),
+    _TabItem(
+        icon: Icons.show_chart_outlined,
+        activeIcon: Icons.show_chart,
+        label: 'İşlem'),
+    _TabItem(
+        icon: Icons.history_outlined,
+        activeIcon: Icons.history,
+        label: 'Geçmiş'),
+    _TabItem(
+        icon: Icons.shield_outlined,
+        activeIcon: Icons.shield,
+        label: 'Risk'),
+    _TabItem(
+        icon: Icons.person_outline,
+        activeIcon: Icons.person,
+        label: 'Profil'),
   ];
 
   @override
@@ -121,9 +130,7 @@ class _BottomNav extends StatelessWidget {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   padding: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                  decoration: const BoxDecoration(),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

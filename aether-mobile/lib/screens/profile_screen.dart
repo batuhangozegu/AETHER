@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../providers/app_providers.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -17,14 +18,12 @@ final userProvider = FutureProvider((ref) {
 
 class _ProfilePrefs {
   final bool twoFA, biometric, priceAlerts, riskAlerts;
-  final String currency;
 
   const _ProfilePrefs({
     this.twoFA = true,
     this.biometric = true,
     this.priceAlerts = true,
     this.riskAlerts = true,
-    this.currency = 'USD',
   });
 
   _ProfilePrefs copyWith({
@@ -32,14 +31,12 @@ class _ProfilePrefs {
     bool? biometric,
     bool? priceAlerts,
     bool? riskAlerts,
-    String? currency,
   }) =>
       _ProfilePrefs(
         twoFA: twoFA ?? this.twoFA,
         biometric: biometric ?? this.biometric,
         priceAlerts: priceAlerts ?? this.priceAlerts,
         riskAlerts: riskAlerts ?? this.riskAlerts,
-        currency: currency ?? this.currency,
       );
 }
 
@@ -49,18 +46,12 @@ final prefsProvider =
 
 class _PrefsNotifier extends StateNotifier<_ProfilePrefs> {
   _PrefsNotifier() : super(const _ProfilePrefs());
-  void set(
-          {bool? twoFA,
-          bool? biometric,
-          bool? priceAlerts,
-          bool? riskAlerts,
-          String? currency}) =>
+  void set({bool? twoFA, bool? biometric, bool? priceAlerts, bool? riskAlerts}) =>
       state = state.copyWith(
         twoFA: twoFA,
         biometric: biometric,
         priceAlerts: priceAlerts,
         riskAlerts: riskAlerts,
-        currency: currency,
       );
 }
 
@@ -73,6 +64,7 @@ class ProfileScreen extends ConsumerWidget {
     final userAsync = ref.watch(userProvider);
     final prefs = ref.watch(prefsProvider);
     final prefsNotifier = ref.read(prefsProvider.notifier);
+    final locale = ref.watch(languageProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
@@ -83,7 +75,7 @@ class ProfileScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top bar
+                // ── Üst bar ──────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(22, 60, 22, 0),
                   child: Row(
@@ -92,47 +84,52 @@ class ProfileScreen extends ConsumerWidget {
                           style: GoogleFonts.spaceGrotesk(
                               fontSize: 13, color: AppColors.text3)),
                       const Spacer(),
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: const Color(0x0AFFFFFF),
-                          borderRadius: BorderRadius.circular(11),
-                          border: Border.all(
-                              color: AppColors.hairline, width: 0.5),
+                      // Kalem butonu — backend hazır olduğunda aktif edilecek
+                      Tooltip(
+                        message: 'Backend bağlantısı gerekli',
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: const Color(0x05FFFFFF),
+                            borderRadius: BorderRadius.circular(11),
+                            border: Border.all(
+                                color: AppColors.hairline, width: 0.5),
+                          ),
+                          child: Icon(Icons.edit_outlined,
+                              color: AppColors.text3.withValues(alpha: 0.4),
+                              size: 16),
                         ),
-                        child: const Icon(Icons.edit_outlined,
-                            color: AppColors.text2, size: 16),
                       ),
                     ],
                   ),
                 ),
 
-                // Avatar + name
+                // ── Avatar + İsim (ortalanmış) ───────────────────────
                 userAsync.when(
-                  data: (user) => _buildProfileHeader(user.initials,
-                      user.name, user.email, user.kycVerified),
+                  data: (user) => _buildProfileHeader(
+                      user.initials, user.name, user.email, user.kycVerified),
                   loading: () => const Padding(
                     padding: EdgeInsets.all(40),
                     child: Center(
-                        child:
-                            CircularProgressIndicator(color: AppColors.accent)),
+                        child: CircularProgressIndicator(
+                            color: AppColors.accent)),
                   ),
                   error: (_, __) => const SizedBox(height: 120),
                 ),
 
-                // Asset summary card
+                // ── Varlık özet kartı ─────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22),
                   child: userAsync.when(
-                    data: (user) => _buildAssetCard(user.totalBalance,
-                        user.pnlPercent),
+                    data: (user) =>
+                        _buildAssetCard(user.totalBalance, user.pnlPercent),
                     loading: () => const SizedBox(height: 80),
                     error: (_, __) => const SizedBox(height: 80),
                   ),
                 ),
 
-                // Security
+                // ── Güvenlik ─────────────────────────────────────────
                 const _SectionLabel('Güvenlik'),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -157,8 +154,7 @@ class ProfileScreen extends ConsumerWidget {
                           title: 'Biyometrik Giriş',
                           subtitle: 'Face ID / Parmak izi',
                           value: prefs.biometric,
-                          onChanged: (v) =>
-                              prefsNotifier.set(biometric: v),
+                          onChanged: (v) => prefsNotifier.set(biometric: v),
                         ),
                         const Divider(
                             color: AppColors.hairline,
@@ -175,7 +171,7 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
 
-                // API Management
+                // ── API Yönetimi ──────────────────────────────────────
                 const _SectionLabel('API Yönetimi'),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -192,31 +188,45 @@ class ProfileScreen extends ConsumerWidget {
                             color: AppColors.hairline,
                             height: 0.5,
                             indent: 56),
-                        InkWell(
-                          onTap: () {},
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accentSoft,
-                                    borderRadius: BorderRadius.circular(9),
-                                  ),
-                                  child: const Icon(Icons.add,
-                                      color: AppColors.accent, size: 16),
+                        // Yeni API — backend hazır olduğunda aktif
+                        Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(16, 13, 16, 13),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: AppColors.accentSoft,
+                                  borderRadius: BorderRadius.circular(9),
                                 ),
-                                const SizedBox(width: 12),
-                                Text('Yeni API anahtarı ekle',
+                                child: const Icon(Icons.add,
+                                    color: AppColors.accent, size: 16),
+                              ),
+                              const SizedBox(width: 12),
+                              Text('Yeni API anahtarı ekle',
+                                  style: GoogleFonts.spaceGrotesk(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.accent,
+                                  )),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0x0DFFFFFF),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                      color: AppColors.hairline, width: 0.5),
+                                ),
+                                child: Text('Yakında',
                                     style: GoogleFonts.spaceGrotesk(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.accent,
-                                    )),
-                              ],
-                            ),
+                                        fontSize: 10,
+                                        color: AppColors.text3)),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -224,7 +234,7 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
 
-                // App settings
+                // ── Uygulama ayarları ─────────────────────────────────
                 const _SectionLabel('Uygulama'),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -257,27 +267,18 @@ class ProfileScreen extends ConsumerWidget {
                             color: AppColors.hairline,
                             height: 0.5,
                             indent: 56),
-                        _CurrencyRow(
-                          value: prefs.currency,
-                          onChanged: (c) =>
-                              prefsNotifier.set(currency: c),
-                        ),
-                        const Divider(
-                            color: AppColors.hairline,
-                            height: 0.5,
-                            indent: 56),
-                        const SettingsLinkRow(
-                          icon: Icon(Icons.language,
-                              color: AppColors.text2, size: 16),
-                          title: 'Dil',
-                          subtitle: 'Türkçe',
+                        // Dil seçici — gerçek locale değişikliği
+                        _LanguageRow(
+                          locale: locale,
+                          onChanged: (l) =>
+                              ref.read(languageProvider.notifier).state = l,
                         ),
                       ],
                     ),
                   ),
                 ),
 
-                // Logout
+                // ── Çıkış ────────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(22, 24, 22, 0),
                   child: Container(
@@ -300,7 +301,8 @@ class ProfileScreen extends ConsumerWidget {
                             letterSpacing: -0.1,
                           )),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14)),
                       ),
@@ -308,7 +310,7 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
 
-                // Version
+                // Versiyon
                 const Padding(
                   padding: EdgeInsets.fromLTRB(0, 18, 0, 32),
                   child: Center(
@@ -330,121 +332,129 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  // ── Profil başlığı (tam ortalanmış) ───────────────────────────────────
   Widget _buildProfileHeader(
       String initials, String name, String email, bool kycVerified) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 14, 22, 22),
-      child: Column(
-        children: [
-          Stack(
-            children: [
-              Container(
-                width: 92,
-                height: 92,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: AppColors.accentGradient,
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x734D9FFF),
-                      blurRadius: 40,
-                      offset: Offset(0, 14),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  initials,
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ),
-              // Halo ring
-              Positioned.fill(
-                child: Container(
+      child: Center(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                // Halo ring
+                Container(
+                  width: 100,
+                  height: 100,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
                         color: const Color(0x404D9FFF), width: 0.5),
                   ),
                 ),
-              ),
-              // Online dot
-              Positioned(
-                bottom: 4,
-                right: 4,
-                child: Container(
-                  width: 16,
-                  height: 16,
+                // Avatar
+                Container(
+                  width: 92,
+                  height: 92,
                   decoration: const BoxDecoration(
-                    color: AppColors.profit,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: AppColors.accentGradient,
+                    ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                          color: Color(0xFF050816),
-                          spreadRadius: 3,
-                          blurRadius: 0),
+                        color: Color(0x734D9FFF),
+                        blurRadius: 40,
+                        offset: Offset(0, 14),
+                      ),
                     ],
                   ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    initials,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(name,
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 21,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.4,
-                color: AppColors.text1,
-              )),
-          const SizedBox(height: 4),
-          Text(email,
-              style: AppTheme.mono(fontSize: 12, color: AppColors.text3)),
-          const SizedBox(height: 12),
-          if (kycVerified)
-            Container(
-              padding:
-                  const EdgeInsets.fromLTRB(8, 5, 12, 5),
-              decoration: BoxDecoration(
-                color: const Color(0x1A5FD49B),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                    color: const Color(0x475FD49B), width: 0.5),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 18,
-                    height: 18,
+                // Online dot
+                Positioned(
+                  bottom: 4,
+                  right: 4,
+                  child: Container(
+                    width: 16,
+                    height: 16,
                     decoration: const BoxDecoration(
                       color: AppColors.profit,
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                            color: Color(0xFF050816),
+                            spreadRadius: 3,
+                            blurRadius: 0),
+                      ],
                     ),
-                    child: const Icon(Icons.check,
-                        color: Color(0xFF0A1320), size: 11),
                   ),
-                  const SizedBox(width: 6),
-                  Text('Hesap Onaylı · KYC',
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.profit,
-                        letterSpacing: 0.02,
-                      )),
-                ],
-              ),
+                ),
+              ],
             ),
-        ],
+            const SizedBox(height: 14),
+            Text(name,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.4,
+                  color: AppColors.text1,
+                )),
+            const SizedBox(height: 4),
+            Text(email,
+                textAlign: TextAlign.center,
+                style:
+                    AppTheme.mono(fontSize: 12, color: AppColors.text3)),
+            const SizedBox(height: 12),
+            if (kycVerified)
+              Container(
+                padding: const EdgeInsets.fromLTRB(8, 5, 12, 5),
+                decoration: BoxDecoration(
+                  color: const Color(0x1A5FD49B),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                      color: const Color(0x475FD49B), width: 0.5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: const BoxDecoration(
+                        color: AppColors.profit,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check,
+                          color: Color(0xFF0A1320), size: 11),
+                    ),
+                    const SizedBox(width: 6),
+                    Text('Hesap Onaylı · KYC',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.profit,
+                          letterSpacing: 0.02,
+                        )),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -535,7 +545,8 @@ class ProfileScreen extends ConsumerWidget {
                               fontSize: 11, color: AppColors.text3)),
                       Text('Binance Sim API',
                           style: AppTheme.mono(
-                              fontSize: 12, fontWeight: FontWeight.w500)),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ),
@@ -560,6 +571,8 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 }
+
+// ── Yardımcı widget'lar ─────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
   final String text;
@@ -641,18 +654,23 @@ class _ApiKeyRow extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0x0AFFFFFF),
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: AppColors.hairline, width: 0.5),
+          // Düzenle — backend bağlandığında aktif edilecek
+          Tooltip(
+            message: 'Backend bağlantısı gerekli',
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0x05FFFFFF),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: AppColors.hairline, width: 0.5),
+              ),
+              child: Text('Düzenle',
+                  style: GoogleFonts.spaceGrotesk(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.text3.withValues(alpha: 0.5))),
             ),
-            child: Text('Düzenle',
-                style: GoogleFonts.spaceGrotesk(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.text2)),
           ),
         ],
       ),
@@ -660,11 +678,12 @@ class _ApiKeyRow extends StatelessWidget {
   }
 }
 
-class _CurrencyRow extends StatelessWidget {
-  final String value;
-  final ValueChanged<String> onChanged;
+/// Dil seçici — TR / EN locale değişikliği yapar
+class _LanguageRow extends StatelessWidget {
+  final Locale locale;
+  final ValueChanged<Locale> onChanged;
 
-  const _CurrencyRow({required this.value, required this.onChanged});
+  const _LanguageRow({required this.locale, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -679,7 +698,7 @@ class _CurrencyRow extends StatelessWidget {
               color: const Color(0x0DFFFFFF),
               borderRadius: BorderRadius.circular(9),
             ),
-            child: const Icon(Icons.attach_money,
+            child: const Icon(Icons.language,
                 color: AppColors.text2, size: 16),
           ),
           const SizedBox(width: 12),
@@ -687,14 +706,14 @@ class _CurrencyRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Yerel Para Birimi',
+                Text('Uygulama Dili',
                     style: GoogleFonts.spaceGrotesk(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: AppColors.text1,
                       letterSpacing: -0.01,
                     )),
-                Text('Fiyatları bu birimde göster',
+                Text('Arayüz dilini seç',
                     style: GoogleFonts.spaceGrotesk(
                         fontSize: 11, color: AppColors.text3)),
               ],
@@ -708,43 +727,70 @@ class _CurrencyRow extends StatelessWidget {
               border: Border.all(color: AppColors.hairline, width: 0.5),
             ),
             child: Row(
-              children: ['USD', 'TRY'].map((c) {
-                final selected = value == c;
-                return GestureDetector(
-                  onTap: () => onChanged(c),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 120),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color:
-                          selected ? AppColors.accent : Colors.transparent,
-                      borderRadius: BorderRadius.circular(7),
-                      boxShadow: selected
-                          ? [
-                              const BoxShadow(
-                                color: Color(0x404D9FFF),
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
-                              )
-                            ]
-                          : null,
-                    ),
-                    child: Text(
-                      c,
-                      style: AppTheme.mono(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: selected ? Colors.white : AppColors.text2,
-                        letterSpacing: 0.04,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
+              children: [
+                _LangButton(
+                  code: 'tr',
+                  label: 'TR',
+                  selected: locale.languageCode == 'tr',
+                  onTap: () => onChanged(const Locale('tr')),
+                ),
+                _LangButton(
+                  code: 'en',
+                  label: 'EN',
+                  selected: locale.languageCode == 'en',
+                  onTap: () => onChanged(const Locale('en')),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LangButton extends StatelessWidget {
+  final String code, label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _LangButton({
+    required this.code,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+          boxShadow: selected
+              ? [
+                  const BoxShadow(
+                    color: Color(0x404D9FFF),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  )
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: AppTheme.mono(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : AppColors.text2,
+            letterSpacing: 0.04,
+          ),
+        ),
       ),
     );
   }

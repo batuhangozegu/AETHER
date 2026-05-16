@@ -285,10 +285,29 @@ class RiskScreen extends ConsumerWidget {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Risk profili kaydedildi.',
-                                  style: GoogleFonts.spaceGrotesk()),
-                              backgroundColor: AppColors.surface2,
+                              content: Row(
+                                children: [
+                                  const Icon(Icons.check_circle_outline,
+                                      color: AppColors.profit, size: 18),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Risk profili kaydedildi.',
+                                    style: GoogleFonts.spaceGrotesk(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              backgroundColor: const Color(0xFF1A2040),
                               behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: const BorderSide(
+                                    color: AppColors.hairline, width: 0.5),
+                              ),
+                              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                             ),
                           );
                         }

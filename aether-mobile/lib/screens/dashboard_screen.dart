@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/asset.dart';
+import '../providers/app_providers.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -35,7 +36,7 @@ class DashboardScreen extends ConsumerWidget {
       backgroundColor: AppColors.bg0,
       body: Stack(
         children: [
-          // Aurora background
+          // Aurora arka plan
           const Positioned(
             top: 0, right: 0, left: 0,
             height: 300,
@@ -52,8 +53,12 @@ class DashboardScreen extends ConsumerWidget {
           CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              SliverToBoxAdapter(child: _buildHeader(portfolioAsync)),
-              SliverToBoxAdapter(child: _buildQuickActions(context)),
+              // Header (ref geçiriliyor — profil butonu için)
+              SliverToBoxAdapter(
+                  child: _buildHeader(context, ref, portfolioAsync)),
+              // Yeni İşlem butonu
+              SliverToBoxAdapter(child: _buildQuickAction(ref)),
+              // Varlıklar başlığı
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(22, 20, 22, 6),
@@ -77,7 +82,7 @@ class DashboardScreen extends ConsumerWidget {
                             Text(
                               '${h.length} coin',
                               style: GoogleFonts.spaceGrotesk(
-                                fontSize: 12, color: AppColors.text3),
+                                  fontSize: 12, color: AppColors.text3),
                             ),
                             const Icon(Icons.chevron_right,
                                 size: 14, color: AppColors.text3),
@@ -90,12 +95,16 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              // Varlık listesi
               holdingsAsync.when(
                 data: (holdings) => SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) => Padding(
                       padding: EdgeInsets.fromLTRB(
-                          22, i == 0 ? 0 : 3, 22, i == holdings.length - 1 ? 24 : 3),
+                          22,
+                          i == 0 ? 0 : 3,
+                          22,
+                          i == holdings.length - 1 ? 24 : 3),
                       child: _AssetCard(asset: holdings[i]),
                     ),
                     childCount: holdings.length,
@@ -124,7 +133,12 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(AsyncValue<Portfolio> portfolioAsync) {
+  // ── Header ──────────────────────────────────────────────────────────
+  Widget _buildHeader(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<Portfolio> portfolioAsync,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 64, 22, 0),
       child: Column(
@@ -144,6 +158,7 @@ class DashboardScreen extends ConsumerWidget {
               ),
               Row(
                 children: [
+                  // Bildirim butonu
                   Container(
                     width: 36,
                     height: 36,
@@ -157,24 +172,29 @@ class DashboardScreen extends ConsumerWidget {
                         color: AppColors.text2, size: 18),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: AppColors.accentGradient,
+                  // Profil avatarı — tıklanınca Profil tabına gider
+                  GestureDetector(
+                    onTap: () =>
+                        ref.read(navIndexProvider.notifier).state = 4,
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: AppColors.accentGradient,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'MK',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                      alignment: Alignment.center,
+                      child: Text(
+                        'MK',
+                        style: GoogleFonts.spaceGrotesk(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -183,6 +203,7 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 16),
+          // Bakiye
           portfolioAsync.when(
             data: (p) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,9 +214,7 @@ class DashboardScreen extends ConsumerWidget {
                       TextSpan(
                         text: '\$',
                         style: AppTheme.mono(
-                          fontSize: 16,
-                          color: AppColors.text3,
-                        ),
+                            fontSize: 16, color: AppColors.text3),
                       ),
                       TextSpan(
                         text: Formatters.price(
@@ -242,7 +261,8 @@ class DashboardScreen extends ConsumerWidget {
             loading: () => const SizedBox(
               height: 70,
               child: Center(
-                  child: CircularProgressIndicator(color: AppColors.accent)),
+                  child:
+                      CircularProgressIndicator(color: AppColors.accent)),
             ),
             error: (_, __) => const SizedBox(height: 70),
           ),
@@ -252,87 +272,44 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickActions(BuildContext context) {
+  // ── Tek buton: Yeni İşlem → Trade tabı ─────────────────────────────
+  Widget _buildQuickAction(WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
-      child: Row(
-        children: [
-          Expanded(
-            child: _QuickActionButton(
-              icon: Icons.swap_vert_rounded,
-              label: 'Yeni İşlem',
-              isPrimary: true,
-              onTap: () {
-                // Tab switch — handled by parent nav
-              },
-            ),
+      child: GestureDetector(
+        onTap: () => ref.read(navIndexProvider.notifier).state = 1,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppColors.accentSoft,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: AppColors.hairlineAccent, width: 0.5),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _QuickActionButton(
-              icon: Icons.add,
-              label: 'Para Ekle',
-              isPrimary: false,
-              onTap: () {},
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isPrimary;
-  final VoidCallback onTap;
-
-  const _QuickActionButton({
-    required this.icon,
-    required this.label,
-    required this.isPrimary,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-        decoration: BoxDecoration(
-          color: isPrimary ? AppColors.accentSoft : AppColors.surface2,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isPrimary ? AppColors.hairlineAccent : AppColors.hairline,
-            width: 0.5,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: isPrimary ? AppColors.accent : AppColors.text1,
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: isPrimary ? AppColors.accent : AppColors.text1,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.swap_vert_rounded,
+                  color: AppColors.accent, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Yeni İşlem',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.accent,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+// ── Varlık kartı ────────────────────────────────────────────────────────
 class _AssetCard extends StatelessWidget {
   final Asset asset;
 
@@ -341,7 +318,7 @@ class _AssetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface1,
         borderRadius: BorderRadius.circular(16),
@@ -349,59 +326,54 @@ class _AssetCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CoinAvatar(symbol: asset.symbol, size: 38),
-          const SizedBox(width: 12),
+          CoinAvatar(symbol: asset.symbol, size: 36),
+          const SizedBox(width: 10),
+          // Sol: isim + ort fiyat
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      asset.symbol,
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.text1,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      Formatters.coinAmount(asset.amount),
-                      style: AppTheme.mono(
-                          fontSize: 11, color: AppColors.text3),
-                    ),
-                  ],
+                Text(
+                  asset.symbol,
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text1,
+                    letterSpacing: -0.1,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'ort. \$${Formatters.price(asset.avgPrice)}',
-                  style: AppTheme.mono(fontSize: 11, color: AppColors.text3),
+                  style: AppTheme.mono(
+                      fontSize: 11, color: AppColors.text3),
                 ),
               ],
             ),
           ),
+          // Orta: sparkline + değer
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               SparklineChart(
                 points: asset.sparkline,
-                color: asset.isProfit ? AppColors.profit : AppColors.loss,
-                width: 48,
-                height: 20,
+                color:
+                    asset.isProfit ? AppColors.profit : AppColors.loss,
+                width: 44,
+                height: 18,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 Formatters.moneyCompact(asset.value),
                 style: AppTheme.mono(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          // Sağ: delta pill
           DeltaPill(value: asset.pnlPercent),
         ],
       ),
