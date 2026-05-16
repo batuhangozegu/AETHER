@@ -1,0 +1,260 @@
+# ══════════════════════════════════════════════════════
+#  .gitignore — Borsa App
+#  Flutter (iOS + Android) + Spring Boot (Java/Kotlin)
+# ══════════════════════════════════════════════════════
+
+# ──────────────────────────────────────────────────────
+# FLUTTER / DART
+# ──────────────────────────────────────────────────────
+
+# Dart tool
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# Build outputs
+build/
+**/build/
+
+# Pub cache & generated files
+.pub-cache/
+.pub/
+pubspec.lock
+
+# Generated files
+*.g.dart
+*.freezed.dart
+*.gr.dart
+
+# Coverage
+coverage/
+
+# Dart analysis
+.dart_analysis_cache
+
+# iOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/Generated.xcconfig
+**/ios/Runner.xcworkspace/xcuserdata/
+**/ios/**/*.xcworkspace/xcuserdata/
+**/ios/**/*.xcuserdata/
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+
+# Android
+**/android/.gradle/
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/key.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/**/GeneratedPluginRegistrant.kt
+**/android/app/google-services.json
+**/android/.idea/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/android/**/*.iml
+
+# macOS
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+**/macos/Flutter/ephemeral/
+
+# Web
+**/web/
+
+# Linux / Windows (sadece mobil hedefliyoruz)
+**/linux/flutter/generated_plugin_registrant.cc
+**/linux/flutter/generated_plugin_registrant.h
+**/linux/flutter/generated_version.h
+**/windows/flutter/generated_plugin_registrant.cc
+**/windows/flutter/generated_plugin_registrant.h
+**/windows/flutter/generated_version.h
+
+# Signing keys (ASLA commit etme!)
+*.jks
+*.keystore
+*.p8
+*.p12
+*.cer
+*.mobileprovision
+key.properties
+
+# ──────────────────────────────────────────────────────
+# SPRING BOOT / JAVA / KOTLIN / MAVEN / GRADLE
+# ──────────────────────────────────────────────────────
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+logs/
+spring.log
+
+# Maven
+target/
+*.jar
+*.war
+*.ear
+*.nar
+!**/src/main/**/target/
+!**/src/test/**/target/
+.mvn/wrapper/maven-wrapper.jar
+mvnw.cmd
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+.gradletasknamecache
+gradlew
+gradlew.bat
+
+# Spring Boot uygulama ayarları (gizli bilgiler!)
+**/src/main/resources/application-local.properties
+**/src/main/resources/application-local.yml
+**/src/main/resources/application-prod.properties
+**/src/main/resources/application-prod.yml
+**/src/main/resources/application-secret.properties
+**/src/main/resources/application-secret.yml
+
+# Ortam değişkenleri
+.env
+.env.local
+.env.production
+.env.*
+
+# ──────────────────────────────────────────────────────
+# IDE & EDITOR
+# ──────────────────────────────────────────────────────
+
+# IntelliJ IDEA / Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea_modules/
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Eclipse
+.project
+.classpath
+.settings/
+.factorypath
+bin/
+
+# NetBeans
+nbproject/
+nbbuild/
+nbdist/
+nb-configuration.xml
+
+# Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+*.xcworkspace/*
+!*.xcworkspace/contents.xcworkspacedata
+xcuserdata/
+*.xccheckout
+*.moved-aside
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# ──────────────────────────────────────────────────────
+# İŞLETİM SİSTEMİ
+# ──────────────────────────────────────────────────────
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.AppleDouble
+.LSOverride
+Icon?
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ──────────────────────────────────────────────────────
+# GÜVENLİK — ASLA COMMIT ETME
+# ──────────────────────────────────────────────────────
+
+# API anahtarları & gizli dosyalar
+secrets/
+*.secret
+*.pem
+*.key
+!*.pub.key
+
+# JWT & token dosyaları
+jwt_secret*
+token*
+
+# Veritabanı dump
+*.sql
+*.dump
+*.sqlite
+*.db
+
+# Docker gizli dosyalar
+docker-compose.override.yml
+.dockerenv
+
+# ──────────────────────────────────────────────────────
+# GENEL
+# ──────────────────────────────────────────────────────
+
+# Geçici dosyalar
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.orig
+
+# Test çıktıları
+test-results/
+surefire-reports/
+
+# Node (design klasörü için)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
