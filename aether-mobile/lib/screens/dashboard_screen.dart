@@ -11,6 +11,9 @@ import '../utils/formatters.dart';
 import '../widgets/coin_avatar.dart';
 import '../widgets/delta_pill.dart';
 import '../widgets/sparkline_chart.dart';
+import 'markets_screen.dart';
+import 'notifications_screen.dart';
+import 'portfolio_breakdown_screen.dart';
 
 // ── Providers ──────────────────────────────────────────────────────────
 final _apiProvider = Provider((_) => ApiService());
@@ -57,41 +60,44 @@ class DashboardScreen extends ConsumerWidget {
               SliverToBoxAdapter(
                   child: _buildHeader(context, ref, portfolioAsync)),
               // Yeni İşlem butonu
-              SliverToBoxAdapter(child: _buildQuickAction(ref)),
+              SliverToBoxAdapter(child: _buildQuickAction(context, ref)),
               // Varlıklar başlığı
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(22, 20, 22, 6),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        'VARLIKLARİM',
-                        style: GoogleFonts.spaceGrotesk(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.11,
-                          color: AppColors.text3,
+                  child: GestureDetector(
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PortfolioBreakdownScreen())),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          'VARLIKLARİM',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.11,
+                            color: AppColors.text3,
+                          ),
                         ),
-                      ),
-                      holdingsAsync.when(
-                        data: (h) => Row(
-                          children: [
-                            Text(
-                              '${h.length} coin',
-                              style: GoogleFonts.spaceGrotesk(
-                                  fontSize: 12, color: AppColors.text3),
-                            ),
-                            const Icon(Icons.chevron_right,
-                                size: 14, color: AppColors.text3),
-                          ],
+                        holdingsAsync.when(
+                          data: (h) => Row(
+                            children: [
+                              Text(
+                                '${h.length} coin',
+                                style: GoogleFonts.spaceGrotesk(
+                                    fontSize: 12, color: AppColors.text3),
+                              ),
+                              const Icon(Icons.chevron_right,
+                                  size: 14, color: AppColors.text3),
+                            ],
+                          ),
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, __) => const SizedBox.shrink(),
                         ),
-                        loading: () => const SizedBox.shrink(),
-                        error: (_, __) => const SizedBox.shrink(),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -159,17 +165,21 @@ class DashboardScreen extends ConsumerWidget {
               Row(
                 children: [
                   // Bildirim butonu
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface1,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppColors.hairline, width: 0.5),
-                    ),
-                    child: const Icon(Icons.notifications_outlined,
-                        color: AppColors.text2, size: 18),
+                  GestureDetector(
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+                    child: Stack(children: [
+                      Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface1,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.hairline, width: 0.5)),
+                        child: const Icon(Icons.notifications_outlined, color: AppColors.text2, size: 18)),
+                      Positioned(top: 7, right: 7, child: Container(
+                        width: 7, height: 7,
+                        decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(color: AppColors.accent, blurRadius: 4)]))),
+                    ]),
                   ),
                   const SizedBox(width: 8),
                   // Profil avatarı — tıklanınca Profil tabına gider
@@ -272,39 +282,43 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  // ── Tek buton: Yeni İşlem → Trade tabı ─────────────────────────────
-  Widget _buildQuickAction(WidgetRef ref) {
+  // ── Hızlı İşlemler: Yeni İşlem + Senkronize Et ─────────────────────
+  Widget _buildQuickAction(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
-      child: GestureDetector(
-        onTap: () => ref.read(navIndexProvider.notifier).state = 1,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-          decoration: BoxDecoration(
-            color: AppColors.accentSoft,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-                color: AppColors.hairlineAccent, width: 0.5),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.swap_vert_rounded,
-                  color: AppColors.accent, size: 18),
+      child: Row(children: [
+        Expanded(child: GestureDetector(
+          onTap: () => ref.read(navIndexProvider.notifier).state = 1,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(color: AppColors.accentSoft,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.hairlineAccent, width: 0.5)),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.swap_vert_rounded, color: AppColors.accent, size: 18),
               const SizedBox(width: 8),
-              Text(
-                'Yeni İşlem',
-                style: GoogleFonts.spaceGrotesk(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.accent,
-                ),
-              ),
-            ],
+              Text('Yeni İşlem', style: GoogleFonts.spaceGrotesk(
+                fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.accent)),
+            ]),
           ),
-        ),
-      ),
+        )),
+        const SizedBox(width: 10),
+        Expanded(child: GestureDetector(
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MarketsScreen())),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.hairline, width: 0.5)),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.bar_chart_rounded, color: AppColors.text1, size: 18),
+              const SizedBox(width: 8),
+              Text('Piyasalar', style: GoogleFonts.spaceGrotesk(
+                fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text1)),
+            ]),
+          ),
+        )),
+      ]),
     );
   }
 }

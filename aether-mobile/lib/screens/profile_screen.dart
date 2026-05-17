@@ -11,6 +11,8 @@ import '../widgets/delta_pill.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/profile_dialogs.dart';
 import '../widgets/settings_toggle_row.dart';
+import 'add_api_key_screen.dart';
+import 'two_factor_setup_screen.dart';
 
 // ── User provider ───────────────────────────────────────────────────────
 final _profileApiProvider = Provider((_) => ApiService());
@@ -119,7 +121,12 @@ class ProfileScreen extends ConsumerWidget {
             Padding(padding: const EdgeInsets.symmetric(horizontal: 22), child: GlassCard(child: Column(children: [
               SettingsToggleRow(icon: const Icon(Icons.security, color: AppColors.text2, size: 16),
                   title: 'İki Faktörlü Doğrulama', subtitle: 'Authenticator · son: 2 gün önce',
-                  value: prefs.twoFA, onChanged: (v) => prefsN.set(twoFA: v)),
+                  value: prefs.twoFA, onChanged: (v) {
+                    if (v) {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const TwoFactorSetupScreen()));
+                    }
+                    prefsN.set(twoFA: v);
+                  }),
               const Divider(color: AppColors.hairline, height: 0.5, indent: 56),
               SettingsToggleRow(icon: const Icon(Icons.face, color: AppColors.text2, size: 16),
                   title: 'Biyometrik Giriş', subtitle: 'Face ID / Parmak izi',
@@ -147,8 +154,7 @@ class ProfileScreen extends ConsumerWidget {
               }),
               const Divider(color: AppColors.hairline, height: 0.5, indent: 0),
               InkWell(
-                onTap: () => showApiKeyDialog(context,
-                    onSave: (ex, mask) => apiKeysN.add(ex, mask)),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddApiKeyScreen())),
                 child: Padding(padding: const EdgeInsets.fromLTRB(16, 13, 16, 13), child: Row(children: [
                   Container(width: 32, height: 32,
                       decoration: BoxDecoration(color: AppColors.accentSoft, borderRadius: BorderRadius.circular(9)),

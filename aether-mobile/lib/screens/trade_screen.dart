@@ -10,6 +10,7 @@ import '../utils/formatters.dart';
 import '../widgets/coin_avatar.dart';
 import '../widgets/delta_pill.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/trade_dialogs.dart';
 
 // ── Providers ──────────────────────────────────────────────────────────
 final _tradeApiProvider = Provider((_) => ApiService());
@@ -220,8 +221,8 @@ class TradeScreen extends ConsumerWidget {
                       const SizedBox(height: 18),
 
                       // Confirm button
-                      _buildConfirmButton(state),
-                      const SizedBox(height: 24),
+                      _buildConfirmButton(context, state),
+                      const SizedBox(height: 44),
                     ],
                   ),
                 ),
@@ -445,7 +446,7 @@ class TradeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildConfirmButton(TradeState state) {
+  Widget _buildConfirmButton(BuildContext context, TradeState state) {
     final isBuy = state.side == TradeSide.buy;
     final color = isBuy ? AppColors.profit : AppColors.loss;
     final commission = state.positionSize * 0.001;
@@ -469,7 +470,15 @@ class TradeScreen extends ConsumerWidget {
             ],
           ),
           child: TextButton(
-            onPressed: () {},
+            onPressed: () {
+              showOrderConfirmSheet(
+                context,
+                isBuy: isBuy,
+                entry: state.entryPrice,
+                stop: state.stopLoss,
+                target: state.targetPrice,
+              );
+            },
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(

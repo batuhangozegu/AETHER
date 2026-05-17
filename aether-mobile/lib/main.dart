@@ -7,6 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'providers/app_providers.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
+import 'screens/auth_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/trade_screen.dart';
 import 'screens/history_screen.dart';
@@ -32,7 +34,8 @@ class BorsaApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final locale = ref.watch(languageProvider);
+    final locale    = ref.watch(languageProvider);
+    final authState = ref.watch(authStateProvider);
     return MaterialApp(
       title: 'Borsa',
       debugShowCheckedModeBanner: false,
@@ -44,7 +47,11 @@ class BorsaApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: const MainShell(),
+      home: switch (authState) {
+        AuthState.onboarding => const OnboardingScreen(),
+        AuthState.auth       => const AuthScreen(),
+        AuthState.app        => const MainShell(),
+      },
     );
   }
 }
