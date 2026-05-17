@@ -222,7 +222,7 @@ secrets/
 *.pem
 *.key
 !*.pub.key
-
+application.yml
 # JWT & token dosyaları
 jwt_secret*
 token*
