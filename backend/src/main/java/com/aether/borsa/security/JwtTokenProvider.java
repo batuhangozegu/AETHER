@@ -49,6 +49,10 @@ public class JwtTokenProvider {
 
     }
 
+    public long getExpiration() {
+        return jwtExpiration;
+    }
+
     public boolean validateToken(String token){
 
         SecretKey key = getSigningKey();
@@ -61,8 +65,11 @@ public class JwtTokenProvider {
         }
     }
 
+
+
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
+
 
 }
