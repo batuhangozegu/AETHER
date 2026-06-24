@@ -30,6 +30,7 @@ public class User {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
+    @Builder.Default
     @Column(name = "kyc_status", nullable = false, length = 20)
     private String kycStatus = "PENDING";
 
