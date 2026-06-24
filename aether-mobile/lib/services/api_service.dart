@@ -9,6 +9,7 @@
 //   - Üretim: https://api.borsa.app
 
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/asset.dart';
 import '../models/transaction.dart';
 import '../models/risk_profile.dart';
@@ -17,7 +18,7 @@ import '../models/order_request.dart';
 class ApiService {
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8080',
+    defaultValue: 'http://192.168.68.242:8080',
   );
 
   // Mock modu: backend hazır olunca false yap
@@ -46,16 +47,16 @@ class ApiService {
     // Auth token interceptor (JWT için hazır)
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        // TODO: SharedPreferences'tan JWT token al
-        // final token = await _getToken();
-        // if (token != null) {
-        //   options.headers['Authorization'] = 'Bearer $token';
-        // }
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString('jwt_token');
+        if (token != null) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
         handler.next(options);
       },
       onError: (error, handler) {
         if (error.response?.statusCode == 401) {
-          // TODO: Token yenile veya login'e yönlendir
+          // Token yenile veya login'e yönlendir
         }
         handler.next(error);
       },
@@ -150,20 +151,42 @@ class ApiService {
     return User.fromJson(res.data as Map<String, dynamic>);
   }
 
-  /// POST /api/auth/login  →  { email, password }
+  /// POST /api/v1/auth/login  →  { email, password }
   Future<String> login(String email, String password) async {
-    if (_useMock) return 'mock-jwt-token';
-    final res = await _dio.post('/api/auth/login', data: {
+    final res = await _dio.post('/api/v1/auth/login', data: {
       'email': email,
       'password': password,
     });
-    return res.data['token'] as String;
+    final token = res.data['accessToken'] as String;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('jwt_token', token);
+    return token;
+  }
+
+  /// POST /api/v1/auth/register  →  { username, email, password }
+  Future<String> register(String username, String email, String password) async {
+    final res = await _dio.post('/api/v1/auth/register', data: {
+      'username': username,
+      'email': email,
+      'password': password,
+    });
+    final token = res.data['accessToken'] as String;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('jwt_token', token);
+    return token;
   }
 
   /// POST /api/auth/logout
   Future<void> logout() async {
-    if (_useMock) return;
-    await _dio.post('/api/auth/logout');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('jwt_token');
+  }
+
+  /// Check if user has token in SharedPreferences
+  Future<bool> isAuthenticated() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    return token != null && token.isNotEmpty;
   }
 
   // ── MOCK DATA ──────────────────────────────────────────────────────

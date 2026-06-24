@@ -29,3 +29,6 @@ server:
 jwt:
   secret: YOUR_JWT_SECRET_HERE
   expiration: 86400000
+
+encryption:
+  secret-key: ???

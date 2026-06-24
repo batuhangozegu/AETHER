@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:dio/dio.dart';
 import '../providers/app_providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -30,12 +31,52 @@ class _LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<_LoginView> {
-  final _emailCtrl = TextEditingController(text: 'mert.kaya@aether.app');
-  final _pwCtrl    = TextEditingController(text: '••••••••');
+  final _emailCtrl = TextEditingController();
+  final _pwCtrl    = TextEditingController();
   bool _showPw = false;
+  bool _loading = false;
 
   @override
   void dispose() { _emailCtrl.dispose(); _pwCtrl.dispose(); super.dispose(); }
+
+  Future<void> _handleLogin(WidgetRef ref) async {
+    final email = _emailCtrl.text.trim();
+    final password = _pwCtrl.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('E-posta ve şifre alanları boş olamaz')),
+      );
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      final apiService = ref.read(apiServiceProvider);
+      await apiService.login(email, password);
+      ref.read(authStateProvider.notifier).setAuthState(AuthState.app);
+    } catch (e) {
+      String errMsg = 'Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.';
+      if (e is DioException) {
+        if (e.response != null && e.response?.data is String) {
+          errMsg = e.response!.data as String;
+        } else if (e.message != null) {
+          errMsg = e.message!;
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errMsg),
+          backgroundColor: AppColors.loss,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,9 +124,11 @@ class _LoginViewState extends State<_LoginView> {
                 child: Text('Şifremi Unuttum?', style: GoogleFonts.spaceGrotesk(
                   fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.text2)))),
             const SizedBox(height: 10),
-            _PrimaryButton(label: 'Giriş Yap', onTap: () {
-              ref.read(authStateProvider.notifier).state = AuthState.app;
-            }),
+            _PrimaryButton(
+              label: 'Giriş Yap',
+              loading: _loading,
+              onTap: () => _handleLogin(ref),
+            ),
             const SizedBox(height: 16),
             Row(children: [
               const Expanded(child: Divider(color: AppColors.hairline, thickness: 0.5)),
@@ -129,6 +172,69 @@ class _RegisterViewState extends State<_RegisterView> {
   final _pw1Ctrl  = TextEditingController();
   final _pw2Ctrl  = TextEditingController();
   bool _showPw1 = false, _showPw2 = false, _agree = true;
+  bool _loading = false;
+
+  Future<void> _handleRegister(WidgetRef ref) async {
+    final username = _userCtrl.text.trim();
+    final email = _mailCtrl.text.trim();
+    final pw1 = _pw1Ctrl.text;
+    final pw2 = _pw2Ctrl.text;
+
+    if (username.isEmpty || email.isEmpty || pw1.isEmpty || pw2.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lütfen tüm alanları doldurun')),
+      );
+      return;
+    }
+
+    if (pw1 != pw2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Girilen şifreler uyuşmuyor')),
+      );
+      return;
+    }
+
+    if (pw1.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Şifre en az 8 karakter olmalıdır')),
+      );
+      return;
+    }
+
+    if (!_agree) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kullanım şartlarını onaylamalısınız')),
+      );
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      final apiService = ref.read(apiServiceProvider);
+      await apiService.register(username, email, pw1);
+      ref.read(authStateProvider.notifier).setAuthState(AuthState.app);
+    } catch (e) {
+      String errMsg = 'Kayıt olunamadı. Lütfen tekrar deneyin.';
+      if (e is DioException) {
+        if (e.response != null && e.response?.data is String) {
+          errMsg = e.response!.data as String;
+        } else if (e.message != null) {
+          errMsg = e.message!;
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errMsg),
+          backgroundColor: AppColors.loss,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   int get _strength {
     final p = _pw1Ctrl.text;
@@ -225,9 +331,11 @@ class _RegisterViewState extends State<_RegisterView> {
               ]),
             ),
             const SizedBox(height: 20),
-            _PrimaryButton(label: 'Kayıt Ol', onTap: () {
-              ref.read(authStateProvider.notifier).state = AuthState.app;
-            }),
+            _PrimaryButton(
+              label: 'Kayıt Ol',
+              loading: _loading,
+              onTap: () => _handleRegister(ref),
+            ),
             const SizedBox(height: 24),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               Text('Zaten hesabınız var mı? ', style: GoogleFonts.spaceGrotesk(fontSize: 13, color: AppColors.text3)),
@@ -348,27 +456,34 @@ class _AuthFieldState extends State<_AuthField> {
 
 class _PrimaryButton extends StatelessWidget {
   final String label;
-  final VoidCallback onTap;
-  const _PrimaryButton({required this.label, required this.onTap});
+  final VoidCallback? onTap;
+  final bool loading;
+  const _PrimaryButton({required this.label, this.onTap, this.loading = false});
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: loading ? null : onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topCenter, end: Alignment.bottomCenter,
-            colors: [Color(0xFF5AAAFF), Color(0xFF4D9FFF), Color(0xFF6A78FF)]),
+            colors: loading
+                ? [const Color(0x804D9FFF), const Color(0x806A78FF)]
+                : [const Color(0xFF5AAAFF), const Color(0xFF4D9FFF), const Color(0xFF6A78FF)]),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(color: Color(0xB34D9FFF), blurRadius: 28, offset: Offset(0, 10)),
-            BoxShadow(color: Color(0x667C5CFF), blurRadius: 28),
-          ],
+          boxShadow: loading
+              ? null
+              : const [
+                  BoxShadow(color: Color(0xB34D9FFF), blurRadius: 28, offset: Offset(0, 10)),
+                  BoxShadow(color: Color(0x667C5CFF), blurRadius: 28),
+                ],
         ),
-        child: Text(label, textAlign: TextAlign.center,
-          style: GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+        child: loading
+            ? const Center(child: SizedBox(width: 19, height: 19, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))
+            : Text(label, textAlign: TextAlign.center,
+                style: GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
       ),
     );
   }

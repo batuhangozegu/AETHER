@@ -97,7 +97,10 @@ class _OnboardingState extends ConsumerState<OnboardingScreen> {
           )),
           Padding(padding: const EdgeInsets.only(bottom: 38), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Text('Hesabınız var mı? ', style: GoogleFonts.spaceGrotesk(fontSize: 12.5, color: AppColors.text3)),
-            Text('Giriş Yapın', style: GoogleFonts.spaceGrotesk(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.accent)),
+            GestureDetector(
+              onTap: () => _finish(),
+              child: Text('Giriş Yapın', style: GoogleFonts.spaceGrotesk(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.accent)),
+            ),
           ])),
         ])),
       ]),
@@ -105,7 +108,7 @@ class _OnboardingState extends ConsumerState<OnboardingScreen> {
   }
 
   void _finish() {
-    ref.read(authStateProvider.notifier).state = AuthState.auth;
+    ref.read(authStateProvider.notifier).completeOnboarding();
   }
 }
 

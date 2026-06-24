@@ -190,7 +190,11 @@ class ProfileScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: const Color(0x33F08080), width: 0.5)),
                 child: TextButton.icon(
-                  onPressed: () {},
+                  onPressed: () async {
+                    final apiService = ref.read(apiServiceProvider);
+                    await apiService.logout();
+                    ref.read(authStateProvider.notifier).setAuthState(AuthState.auth);
+                  },
                   icon: const Icon(Icons.logout, color: AppColors.loss, size: 17),
                   label: Text('Oturumu Kapat', style: GoogleFonts.spaceGrotesk(
                       fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.loss)),
