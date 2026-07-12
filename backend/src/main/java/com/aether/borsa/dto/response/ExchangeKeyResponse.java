@@ -13,6 +13,7 @@ public class ExchangeKeyResponse {
     private UUID id;
     private ExchangeName exchangeName;
     private String maskedApiKey;
-    private String permissions;
+    private boolean canRead;
+    private boolean canTrade;
     private String status;
 }
