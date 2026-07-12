@@ -25,7 +25,7 @@ public class EncryptionUtil {
     public String encrypt(String plainText) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
 
         SecretKeySpec keySpec = new SecretKeySpec(
-                secretKey.getBytes(StandardCharsets.UTF_8), "AES"
+                Base64.getDecoder().decode(secretKey), "AES"
         );
         byte[] iv = new byte[16];
         new SecureRandom().nextBytes(iv);
@@ -49,7 +49,7 @@ public class EncryptionUtil {
         System.arraycopy(combined, 16, encrypted, 0, encrypted.length);
 
         SecretKeySpec keySpec = new SecretKeySpec(
-                secretKey.getBytes(StandardCharsets.UTF_8), "AES"
+                Base64.getDecoder().decode(secretKey), "AES"
         );
 
         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");

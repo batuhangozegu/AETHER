@@ -33,7 +33,7 @@ public class AuthServiceImpl implements AuthService {
 
         userRepository.save(user);
 
-       String token = jwtTokenProvider.generateToken(request.getEmail());
+       String token = jwtTokenProvider.generateToken(user.getId());
        return new TokenResponse(token,null, "Bearer" , jwtTokenProvider.getExpiration());
     }
 
@@ -45,7 +45,7 @@ public class AuthServiceImpl implements AuthService {
         {
             throw new RuntimeException("Şifre hatalı");
         }
-        String token = jwtTokenProvider.generateToken(user.getEmail());
+        String token = jwtTokenProvider.generateToken(user.getId());
         return new TokenResponse(token, null, "Bearer", jwtTokenProvider.getExpiration());
     }
 }
