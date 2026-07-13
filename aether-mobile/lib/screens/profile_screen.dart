@@ -43,14 +43,15 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userAsync = ref.watch(userProvider);
-    final prefs     = ref.watch(prefsProvider);
-    final prefsN    = ref.read(prefsProvider.notifier);
-    final locale    = ref.watch(languageProvider);
-    final apiKeys   = ref.watch(apiKeysProvider);
-    final apiKeysN  = ref.read(apiKeysProvider.notifier);
-    final localName  = ref.watch(_localNameProvider);
-    final localEmail = ref.watch(_localEmailProvider);
+    final userAsync    = ref.watch(userProvider);
+    final prefs        = ref.watch(prefsProvider);
+    final prefsN       = ref.read(prefsProvider.notifier);
+    final locale       = ref.watch(languageProvider);
+    final apiKeysAsync = ref.watch(apiKeysProvider);
+    final apiKeysN     = ref.read(apiKeysProvider.notifier);
+    final localName    = ref.watch(_localNameProvider);
+    final localEmail   = ref.watch(_localEmailProvider);
+    final apiKeys      = apiKeysAsync.valueOrNull ?? [];
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
@@ -139,19 +140,32 @@ class ProfileScreen extends ConsumerWidget {
             // ── API Yönetimi ───────────────────────────────────────────
             const _Label('API Yönetimi'),
             Padding(padding: const EdgeInsets.symmetric(horizontal: 22), child: GlassCard(child: Column(children: [
-              ...apiKeys.asMap().entries.expand((e) {
-                final k = e.value;
-                return [
-                  if (e.key > 0) const Divider(color: AppColors.hairline, height: 0.5, indent: 56),
-                  _ApiKeyRow(
-                    key: ValueKey(k.id),
-                    apiKey: k,
-                    onEdit: () => showApiKeyDialog(context, existing: k,
-                        onSave: (ex, mask) => apiKeysN.update(k.id, ex, mask)),
-                    onDelete: () => apiKeysN.remove(k.id),
-                  ),
-                ];
-              }),
+              // Yükleniyor / hata durumu
+              if (apiKeysAsync.isLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Center(child: CircularProgressIndicator(color: AppColors.accent, strokeWidth: 2)),
+                )
+              else if (apiKeysAsync.hasError)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('API anahtarları yüklenemedi.',
+                      style: GoogleFonts.spaceGrotesk(color: AppColors.text3, fontSize: 13)),
+                )
+              else
+                ...apiKeys.asMap().entries.expand((e) {
+                  final k = e.value;
+                  return [
+                    if (e.key > 0) const Divider(color: AppColors.hairline, height: 0.5, indent: 56),
+                    _ApiKeyRow(
+                      key: ValueKey(k.id),
+                      apiKey: k,
+                      onEdit: () => showApiKeyDialog(context, existing: k,
+                          onSave: (ex, mask) => apiKeysN.editLocal(k.id, ex, mask)),
+                      onDelete: () => apiKeysN.removeKey(k.id),
+                    ),
+                  ];
+                }),
               const Divider(color: AppColors.hairline, height: 0.5, indent: 0),
               InkWell(
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddApiKeyScreen())),

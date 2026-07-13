@@ -11,9 +11,10 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/asset.dart';
-import '../models/transaction.dart';
-import '../models/risk_profile.dart';
+import '../models/exchange_key.dart';
 import '../models/order_request.dart';
+import '../models/risk_profile.dart';
+import '../models/transaction.dart';
 
 class ApiService {
   static const String _baseUrl = String.fromEnvironment(
@@ -21,8 +22,8 @@ class ApiService {
     defaultValue: 'http://192.168.68.242:8080',
   );
 
-  // Mock modu: backend hazır olunca false yap
-  static const bool _useMock = true;
+  // Mock modu kapalı — tüm endpoint'ler gerçek backend'e bağlı
+  static const bool _useMock = false;
 
   late final Dio _dio;
 
@@ -180,6 +181,40 @@ class ApiService {
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('jwt_token');
+  }
+
+  // ── EXCHANGE KEYS ───────────────────────────────────────────────────
+
+  /// GET /api/v1/exchanges
+  Future<List<ExchangeKeyModel>> getExchangeKeys() async {
+    final res = await _dio.get('/api/v1/exchanges');
+    final list = res.data as List<dynamic>;
+    return list
+        .map((e) => ExchangeKeyModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// POST /api/v1/exchanges
+  Future<ExchangeKeyModel> addExchangeKey({
+    required String exchangeName,
+    required String apiKey,
+    required String secretKey,
+    bool canRead = true,
+    bool canTrade = false,
+  }) async {
+    final res = await _dio.post('/api/v1/exchanges', data: {
+      'exchangeName': exchangeName,
+      'apiKey': apiKey,
+      'secretKey': secretKey,
+      'canRead': canRead,
+      'canTrade': canTrade,
+    });
+    return ExchangeKeyModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// DELETE /api/v1/exchanges/{id}
+  Future<void> deleteExchangeKey(String id) async {
+    await _dio.delete('/api/v1/exchanges/$id');
   }
 
   /// Check if user has token in SharedPreferences
