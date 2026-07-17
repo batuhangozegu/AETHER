@@ -22,22 +22,26 @@ public class ExchangeKeyController {
 
     @GetMapping()
     public ResponseEntity<List<ExchangeKeyResponse>> getExchangeKeys(Authentication authentication){
-        UUID userId = UUID.fromString(authentication.getName());
+        UUID userId = getUserId(authentication);
         return ResponseEntity.ok(exchangeKeyService.getExchangeKeys(userId));
     }
 
     @PostMapping
     public ResponseEntity<ExchangeKeyResponse> addExchangeKeys(Authentication authentication, @RequestBody @Valid AddExchangeKeyRequest request) throws Exception{
-        UUID userId = UUID.fromString(authentication.getName());
+        UUID userId = getUserId(authentication);
         return ResponseEntity.status(201).body(exchangeKeyService.addExchangeKey(userId,request));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteExchangeKeys(Authentication authentication , @PathVariable UUID id){
-        UUID userId = UUID.fromString(authentication.getName());
+        UUID userId = getUserId(authentication);
         exchangeKeyService.deleteExchangeKeys(userId, id);
 
         return ResponseEntity.noContent().build();
+    }
+
+    private UUID getUserId(Authentication authentication) {
+        return UUID.fromString(authentication.getName());
     }
 
 }
