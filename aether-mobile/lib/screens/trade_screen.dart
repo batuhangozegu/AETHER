@@ -3,7 +3,11 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/api_service.dart';
+import 'package:dio/dio.dart';
+import '../models/order.dart';
+import '../providers/api_keys_provider.dart';
+import '../providers/app_providers.dart';
+import '../providers/trade_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
@@ -13,24 +17,24 @@ import '../widgets/glass_card.dart';
 import '../widgets/trade_dialogs.dart';
 
 // ── Providers ──────────────────────────────────────────────────────────
-final _tradeApiProvider = Provider((_) => ApiService());
-
 final priceHistoryProvider = FutureProvider((ref) {
-  return ref.watch(_tradeApiProvider).getPriceHistory('BTC');
+  return ref.watch(apiServiceProvider).getPriceHistory('BTC');
 });
 
 // ── State ──────────────────────────────────────────────────────────────
 enum TradeSide { buy, sell }
 
-class TradeState {
+class TradeFormState {
   final TradeSide side;
   final double entryPrice;
   final double stopLoss;
+  final String? selectedKeyId; // exchangeKeyId for backend
 
-  const TradeState({
+  const TradeFormState({
     this.side = TradeSide.buy,
     this.entryPrice = 67234.12,
     this.stopLoss = 65800.00,
+    this.selectedKeyId,
   });
 
   double get accountBalance => 84273.52;
@@ -44,23 +48,25 @@ class TradeState {
   double get stopPercent =>
       entryPrice > 0 ? ((entryPrice - stopLoss) / entryPrice) * 100 : 0;
 
-  TradeState copyWith({TradeSide? side, double? entryPrice, double? stopLoss}) =>
-      TradeState(
+  TradeFormState copyWith({TradeSide? side, double? entryPrice, double? stopLoss, String? selectedKeyId}) =>
+      TradeFormState(
         side: side ?? this.side,
         entryPrice: entryPrice ?? this.entryPrice,
         stopLoss: stopLoss ?? this.stopLoss,
+        selectedKeyId: selectedKeyId ?? this.selectedKeyId,
       );
 }
 
-class TradeNotifier extends StateNotifier<TradeState> {
-  TradeNotifier() : super(const TradeState());
+class TradeFormNotifier extends StateNotifier<TradeFormState> {
+  TradeFormNotifier() : super(const TradeFormState());
   void setSide(TradeSide side) => state = state.copyWith(side: side);
   void setEntry(double v) => state = state.copyWith(entryPrice: v);
   void setStop(double v) => state = state.copyWith(stopLoss: v);
+  void setKeyId(String id) => state = state.copyWith(selectedKeyId: id);
 }
 
-final tradeProvider = StateNotifierProvider<TradeNotifier, TradeState>(
-  (_) => TradeNotifier(),
+final tradeFormProvider = StateNotifierProvider<TradeFormNotifier, TradeFormState>(
+  (_) => TradeFormNotifier(),
 );
 
 // ── Screen ─────────────────────────────────────────────────────────────
@@ -69,9 +75,11 @@ class TradeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(tradeProvider);
-    final notifier = ref.read(tradeProvider.notifier);
+    final state = ref.watch(tradeFormProvider);
+    final notifier = ref.read(tradeFormProvider.notifier);
     final historyAsync = ref.watch(priceHistoryProvider);
+    final keysAsync = ref.watch(apiKeysProvider);
+    final activeOrdersAsync = ref.watch(tradeStateProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
@@ -193,6 +201,14 @@ class TradeScreen extends ConsumerWidget {
                       _buildTimeRange(),
                       const SizedBox(height: 18),
 
+                      // Exchange key selector
+                      _ExchangeKeySelector(
+                        keysAsync: keysAsync,
+                        selectedId: state.selectedKeyId,
+                        onSelected: notifier.setKeyId,
+                      ),
+                      const SizedBox(height: 14),
+
                       // Buy/Sell toggle
                       _buildSideToggle(state, notifier),
                       const SizedBox(height: 14),
@@ -221,7 +237,11 @@ class TradeScreen extends ConsumerWidget {
                       const SizedBox(height: 18),
 
                       // Confirm button
-                      _buildConfirmButton(context, state),
+                      _buildConfirmButton(context, ref, state),
+                      const SizedBox(height: 18),
+
+                      // Active orders panel
+                      _ActiveOrdersPanel(ordersAsync: activeOrdersAsync, ref: ref),
                       const SizedBox(height: 44),
                     ],
                   ),
@@ -329,7 +349,7 @@ class TradeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSideToggle(TradeState state, TradeNotifier notifier) {
+  Widget _buildSideToggle(TradeFormState state, TradeFormNotifier notifier) {
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
@@ -351,12 +371,13 @@ class TradeScreen extends ConsumerWidget {
             isBuy: false,
             onTap: () => notifier.setSide(TradeSide.sell),
           ),
+
         ],
       ),
     );
   }
 
-  Widget _buildRiskCard(TradeState state) {
+  Widget _buildRiskCard(TradeFormState state) {
     return AccentCard(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -446,7 +467,7 @@ class TradeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildConfirmButton(BuildContext context, TradeState state) {
+  Widget _buildConfirmButton(BuildContext context, WidgetRef ref, TradeFormState state) {
     final isBuy = state.side == TradeSide.buy;
     final color = isBuy ? AppColors.profit : AppColors.loss;
     final commission = state.positionSize * 0.001;
@@ -470,15 +491,7 @@ class TradeScreen extends ConsumerWidget {
             ],
           ),
           child: TextButton(
-            onPressed: () {
-              showOrderConfirmSheet(
-                context,
-                isBuy: isBuy,
-                entry: state.entryPrice,
-                stop: state.stopLoss,
-                target: state.targetPrice,
-              );
-            },
+            onPressed: () => _submitOrder(context, ref, state),
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
@@ -499,18 +512,54 @@ class TradeScreen extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.info_outline,
-                size: 11, color: AppColors.text3),
+            const Icon(Icons.info_outline, size: 11, color: AppColors.text3),
             const SizedBox(width: 4),
             Text(
               'Komisyon dahil ≈ ${Formatters.money(commission)}',
-              style:
-                  GoogleFonts.spaceGrotesk(fontSize: 11, color: AppColors.text3),
+              style: GoogleFonts.spaceGrotesk(fontSize: 11, color: AppColors.text3),
             ),
           ],
         ),
       ],
     );
+  }
+
+  Future<void> _submitOrder(BuildContext context, WidgetRef ref, TradeFormState state) async {
+    if (state.selectedKeyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lütfen bir borsa bağlantısı seçin')),
+      );
+      return;
+    }
+    final payload = CreateOrderPayload(
+      exchangeKeyId: state.selectedKeyId!,
+      symbol: 'BTCUSDT',
+      side: state.side == TradeSide.buy ? 'BUY' : 'SELL',
+      type: 'LIMIT',
+      amount: state.idealUnits,
+      entryPrice: state.entryPrice,
+      stopLoss: state.stopLoss,
+      takeProfit: state.targetPrice,
+    );
+    try {
+      await ref.read(tradeStateProvider.notifier).createOrder(payload);
+      if (context.mounted) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderSuccessScreen()));
+      }
+    } on DioException catch (e) {
+      if (context.mounted) {
+        final msg = e.response?.data?.toString() ?? e.message ?? 'Hata oluştu';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: AppColors.loss),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.loss),
+        );
+      }
+    }
   }
 }
 
@@ -688,5 +737,190 @@ class _RiskStat extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ── Exchange Key Selector ──────────────────────────────────────────────
+class _ExchangeKeySelector extends StatelessWidget {
+  final AsyncValue<List<ApiKey>> keysAsync;
+  final String? selectedId;
+  final ValueChanged<String> onSelected;
+
+  const _ExchangeKeySelector({
+    required this.keysAsync,
+    required this.selectedId,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return keysAsync.when(
+      data: (keys) {
+        if (keys.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.surface1,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.hairline, width: 0.5),
+            ),
+            child: Row(children: [
+              const Icon(Icons.warning_amber_rounded, color: AppColors.loss, size: 16),
+              const SizedBox(width: 8),
+              Text('Borsa bağlantısı yok — önce API Key ekleyin',
+                  style: GoogleFonts.spaceGrotesk(fontSize: 12, color: AppColors.text3)),
+            ]),
+          );
+        }
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.surface1,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.hairline, width: 0.5),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedId,
+              hint: Text('Borsa seç', style: GoogleFonts.spaceGrotesk(fontSize: 13, color: AppColors.text3)),
+              dropdownColor: AppColors.surface2,
+              isExpanded: true,
+              icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.text3, size: 18),
+              items: keys.map((k) => DropdownMenuItem(
+                value: k.id,
+                child: Text('${k.exchange} — ${k.mask}',
+                    style: GoogleFonts.spaceGrotesk(fontSize: 13, color: AppColors.text1)),
+              )).toList(),
+              onChanged: (v) { if (v != null) onSelected(v); },
+            ),
+          ),
+        );
+      },
+      loading: () => const SizedBox(height: 44, child: Center(child: CircularProgressIndicator(color: AppColors.accent, strokeWidth: 2))),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+}
+
+// ── Active Orders Panel ────────────────────────────────────────────────
+class _ActiveOrdersPanel extends StatelessWidget {
+  final AsyncValue<List<OrderModel>> ordersAsync;
+  final WidgetRef ref;
+
+  const _ActiveOrdersPanel({required this.ordersAsync, required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    return ordersAsync.when(
+      data: (orders) {
+        if (orders.isEmpty) return const SizedBox.shrink();
+        final open = orders.where((o) => o.isOpen).toList();
+        if (open.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Text('AKTİF POZİSYONLAR',
+                  style: GoogleFonts.spaceGrotesk(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.text3, letterSpacing: 0.1)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: AppColors.accentSoft, borderRadius: BorderRadius.circular(4)),
+                child: Text('${open.length}', style: AppTheme.mono(fontSize: 10, color: AppColors.accent)),
+              ),
+            ]),
+            const SizedBox(height: 10),
+            ...open.map((o) => _OrderCard(order: o, ref: ref)),
+          ],
+        );
+      },
+      loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: AppColors.accent, strokeWidth: 2))),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _OrderCard extends StatelessWidget {
+  final OrderModel order;
+  final WidgetRef ref;
+  const _OrderCard({required this.order, required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    final pnl = order.currentPnL ?? 0.0;
+    final isProfit = pnl >= 0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.hairline, width: 0.5),
+      ),
+      child: Row(children: [
+        CoinAvatar(symbol: order.symbol.replaceAll('USDT', '').replaceAll('BUSD', ''), size: 32),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: order.isBuy ? AppColors.profitSoft : AppColors.lossSoft,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(order.isBuy ? 'ALIŞ' : 'SATIŞ',
+                  style: GoogleFonts.spaceGrotesk(fontSize: 9, fontWeight: FontWeight.w700,
+                      color: order.isBuy ? AppColors.profit : AppColors.loss)),
+            ),
+            const SizedBox(width: 6),
+            Text(order.symbol, style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.text1)),
+          ]),
+          const SizedBox(height: 2),
+          Text('${order.amount.toStringAsFixed(4)} adet',
+              style: AppTheme.mono(fontSize: 11, color: AppColors.text3)),
+        ])),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text(
+            '${isProfit ? '+' : ''}${Formatters.money(pnl)}',
+            style: AppTheme.mono(fontSize: 14, fontWeight: FontWeight.w500,
+                color: isProfit ? AppColors.profit : AppColors.loss),
+          ),
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: () => _closeOrder(context, order.id),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.lossSoft,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppColors.loss.withValues(alpha: 0.3), width: 0.5),
+              ),
+              child: Text('Kapat', style: GoogleFonts.spaceGrotesk(fontSize: 10, color: AppColors.loss, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  Future<void> _closeOrder(BuildContext context, String orderId) async {
+    try {
+      await ref.read(tradeStateProvider.notifier).closeOrder(orderId);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Pozisyon kapatıldı', style: GoogleFonts.spaceGrotesk(color: Colors.white)),
+            backgroundColor: const Color(0xFF1A2040),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.loss),
+        );
+      }
+    }
   }
 }

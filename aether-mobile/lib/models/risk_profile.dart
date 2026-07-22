@@ -1,4 +1,7 @@
 // lib/models/risk_profile.dart
+//
+// Flutter-side field adları: riskPerTrade, rrRatio, maxOpenPositions, dailyLossCap, autoStopLoss
+// Backend JSON key adları  : riskPerTradePct, targetRr, maxOpenPositions, dailyLossCapPct, autoStopLossEnabled
 class RiskProfile {
   final double riskPerTrade;   // %0.5 – %5
   final double rrRatio;        // 1:1 – 1:5
@@ -29,19 +32,23 @@ class RiskProfile {
         autoStopLoss: autoStopLoss ?? this.autoStopLoss,
       );
 
+  /// Backend'den gelen JSON (GET /api/v1/risk/profile):
+  /// { riskPerTradePct, targetRr, dailyLossCapPct, autoStopLossEnabled, maxOpenPositions }
   factory RiskProfile.fromJson(Map<String, dynamic> json) => RiskProfile(
-        riskPerTrade: (json['riskPerTrade'] as num).toDouble(),
-        rrRatio: (json['rrRatio'] as num).toDouble(),
-        maxOpenPositions: json['maxOpenPositions'] as int,
-        dailyLossCap: (json['dailyLossCap'] as num).toDouble(),
-        autoStopLoss: json['autoStopLoss'] as bool,
+        riskPerTrade: (json['riskPerTradePct'] as num).toDouble(),
+        rrRatio: (json['targetRr'] as num).toDouble(),
+        maxOpenPositions: (json['maxOpenPositions'] as int?) ?? 4,
+        dailyLossCap: (json['dailyLossCapPct'] as num).toDouble(),
+        autoStopLoss: (json['autoStopLossEnabled'] as bool?) ?? false,
       );
 
+  /// Backend'e gönderilecek JSON (PUT /api/v1/risk/profile):
+  /// { riskPerTradePct, dailyLossCapPct, targetRr, autoStopLossEnabled, maxOpenPositions }
   Map<String, dynamic> toJson() => {
-        'riskPerTrade': riskPerTrade,
-        'rrRatio': rrRatio,
+        'riskPerTradePct': riskPerTrade,
+        'dailyLossCapPct': dailyLossCap,
+        'targetRr': rrRatio,
+        'autoStopLossEnabled': autoStopLoss,
         'maxOpenPositions': maxOpenPositions,
-        'dailyLossCap': dailyLossCap,
-        'autoStopLoss': autoStopLoss,
       };
 }

@@ -2,43 +2,62 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/order.dart';
 import '../models/risk_profile.dart';
 import '../services/api_service.dart';
+import '../providers/app_providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/glass_card.dart';
 
-// ── Provider ───────────────────────────────────────────────────────────
+// ── Providers ──────────────────────────────────────────────────────────
 class RiskNotifier extends StateNotifier<RiskProfile> {
   final ApiService _api;
   RiskNotifier(this._api) : super(const RiskProfile());
 
   Future<void> load() async {
-    state = await _api.getRiskProfile();
+    try {
+      state = await _api.getRiskProfile();
+    } catch (_) {
+      // fallback to defaults on error
+    }
   }
 
-  void setRiskPerTrade(double v) =>
-      state = state.copyWith(riskPerTrade: v);
+  void setRiskPerTrade(double v) => state = state.copyWith(riskPerTrade: v);
   void setRrRatio(double v) => state = state.copyWith(rrRatio: v);
   void setMaxOpen(int v) => state = state.copyWith(maxOpenPositions: v);
-  void setDailyLossCap(double v) =>
-      state = state.copyWith(dailyLossCap: v);
+  void setDailyLossCap(double v) => state = state.copyWith(dailyLossCap: v);
   void setAutoStop(bool v) => state = state.copyWith(autoStopLoss: v);
 
   Future<void> save() async {
-    await _api.saveRiskProfile(state);
+    state = await _api.saveRiskProfile(state);
   }
 }
 
-final riskApiProvider = Provider((_) => ApiService());
-
-final riskProvider =
-    StateNotifierProvider<RiskNotifier, RiskProfile>((ref) {
-  final notifier = RiskNotifier(ref.watch(riskApiProvider));
+final riskProvider = StateNotifierProvider<RiskNotifier, RiskProfile>((ref) {
+  final notifier = RiskNotifier(ref.watch(apiServiceProvider));
   notifier.load();
   return notifier;
 });
+
+// ── Risk Calculation Provider ──────────────────────────────────────────
+class RiskCalcNotifier extends StateNotifier<AsyncValue<RiskCalculationResult?>> {
+  final ApiService _api;
+  RiskCalcNotifier(this._api) : super(const AsyncData(null));
+
+  Future<void> calculate(RiskCalculationPayload payload) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => _api.calculateRisk(payload));
+  }
+
+  void reset() => state = const AsyncData(null);
+}
+
+final riskCalcProvider =
+    StateNotifierProvider<RiskCalcNotifier, AsyncValue<RiskCalculationResult?>>(
+  (ref) => RiskCalcNotifier(ref.watch(apiServiceProvider)),
+);
 
 // ── Screen ─────────────────────────────────────────────────────────────
 class RiskScreen extends ConsumerWidget {
@@ -167,8 +186,7 @@ class RiskScreen extends ConsumerWidget {
                   _RiskSlider(
                     label: 'İşlem Başına Maks. Risk',
                     value: profile.riskPerTrade,
-                    displayValue:
-                        '${profile.riskPerTrade.toStringAsFixed(1)}%',
+                    displayValue: '${profile.riskPerTrade.toStringAsFixed(1)}%',
                     min: 0.5,
                     max: 5,
                     divisions: 45,
@@ -182,8 +200,7 @@ class RiskScreen extends ConsumerWidget {
                   _RiskSlider(
                     label: 'Risk / Ödül Oranı',
                     value: profile.rrRatio,
-                    displayValue:
-                        '1:${profile.rrRatio.toStringAsFixed(1)}',
+                    displayValue: '1:${profile.rrRatio.toStringAsFixed(1)}',
                     min: 1,
                     max: 5,
                     divisions: 40,
@@ -259,6 +276,10 @@ class RiskScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 14),
+
+                  // ── Risk Calculator ──────────────────────────────────
+                  _RiskCalculatorCard(profile: profile),
                   const SizedBox(height: 20),
 
                   // Save button
@@ -281,35 +302,47 @@ class RiskScreen extends ConsumerWidget {
                     ),
                     child: TextButton(
                       onPressed: () async {
-                        await notifier.save();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Row(
-                                children: [
-                                  const Icon(Icons.check_circle_outline,
-                                      color: AppColors.profit, size: 18),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    'Risk profili kaydedildi.',
-                                    style: GoogleFonts.spaceGrotesk(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
+                        try {
+                          await notifier.save();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(Icons.check_circle_outline,
+                                        color: AppColors.profit, size: 18),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'Risk profili kaydedildi.',
+                                      style: GoogleFonts.spaceGrotesk(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                backgroundColor: const Color(0xFF1A2040),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: const BorderSide(
+                                      color: AppColors.hairline, width: 0.5),
+                                ),
+                                margin:
+                                    const EdgeInsets.fromLTRB(16, 0, 16, 16),
                               ),
-                              backgroundColor: const Color(0xFF1A2040),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: const BorderSide(
-                                    color: AppColors.hairline, width: 0.5),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Kayıt başarısız: $e'),
+                                backgroundColor: AppColors.loss,
                               ),
-                              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            ),
-                          );
+                            );
+                          }
                         }
                       },
                       style: TextButton.styleFrom(
@@ -346,6 +379,279 @@ class RiskScreen extends ConsumerWidget {
   }
 }
 
+// ── Risk Calculator Card ───────────────────────────────────────────────
+class _RiskCalculatorCard extends ConsumerStatefulWidget {
+  final RiskProfile profile;
+  const _RiskCalculatorCard({required this.profile});
+
+  @override
+  ConsumerState<_RiskCalculatorCard> createState() =>
+      _RiskCalculatorCardState();
+}
+
+class _RiskCalculatorCardState extends ConsumerState<_RiskCalculatorCard> {
+  final _symbolCtrl = TextEditingController(text: 'BTCUSDT');
+  final _entryCtrl = TextEditingController(text: '67234');
+  final _stopCtrl = TextEditingController(text: '65800');
+  final _balanceCtrl = TextEditingController(text: '84273');
+
+  @override
+  void dispose() {
+    _symbolCtrl.dispose();
+    _entryCtrl.dispose();
+    _stopCtrl.dispose();
+    _balanceCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _calculate() async {
+    final entry = double.tryParse(_entryCtrl.text);
+    final stop = double.tryParse(_stopCtrl.text);
+    final balance = double.tryParse(_balanceCtrl.text);
+    final symbol = _symbolCtrl.text.trim();
+
+    if (entry == null || stop == null || balance == null || symbol.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lütfen tüm alanları doldurun')),
+      );
+      return;
+    }
+
+    await ref.read(riskCalcProvider.notifier).calculate(
+          RiskCalculationPayload(
+            symbol: symbol,
+            entryPrice: entry,
+            stopLossPrice: stop,
+            accountBalance: balance,
+          ),
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final calcAsync = ref.watch(riskCalcProvider);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface1,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.hairline, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: AppColors.accentSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.calculate_outlined,
+                    color: AppColors.accent, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Text('RİSK HESAPLAYICI',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text1,
+                    letterSpacing: 0.05,
+                  )),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                  child: _CalcField(
+                      label: 'Sembol',
+                      controller: _symbolCtrl,
+                      hint: 'BTCUSDT')),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _CalcField(
+                      label: 'Bakiye (\$)',
+                      controller: _balanceCtrl,
+                      hint: '84273',
+                      isNum: true)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                  child: _CalcField(
+                      label: 'Giriş Fiyatı',
+                      controller: _entryCtrl,
+                      hint: '67234',
+                      isNum: true)),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _CalcField(
+                      label: 'Stop Fiyatı',
+                      controller: _stopCtrl,
+                      hint: '65800',
+                      isNum: true)),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Result area
+          calcAsync.when(
+            data: (result) {
+              if (result == null) return const SizedBox.shrink();
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                decoration: BoxDecoration(
+                  color: AppColors.accentSoft,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: AppColors.hairlineAccent, width: 0.5),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _CalcResultItem(
+                        label: 'ÖNERİLEN MİKTAR',
+                        value: result.suggestedAmount.toStringAsFixed(4),
+                        color: AppColors.accent),
+                    _CalcResultItem(
+                        label: 'RİSK (\$)',
+                        value:
+                            Formatters.moneyCompact(result.riskAmountUsd),
+                        color: AppColors.loss),
+                    _CalcResultItem(
+                        label: 'RİSK %',
+                        value:
+                            '${result.riskPercentage.toStringAsFixed(2)}%',
+                        color: AppColors.text1),
+                  ],
+                ),
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Center(
+                  child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: AppColors.accent, strokeWidth: 2))),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text('Hata: $e',
+                  style: GoogleFonts.spaceGrotesk(
+                      fontSize: 11, color: AppColors.loss)),
+            ),
+          ),
+
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: _calculate,
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.accentSoft,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: const BorderSide(
+                      color: AppColors.hairlineAccent, width: 0.5),
+                ),
+              ),
+              child: Text('Hesapla',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.accent,
+                  )),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalcField extends StatelessWidget {
+  final String label, hint;
+  final TextEditingController controller;
+  final bool isNum;
+  const _CalcField(
+      {required this.label,
+      required this.controller,
+      required this.hint,
+      this.isNum = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: GoogleFonts.spaceGrotesk(
+                fontSize: 10,
+                color: AppColors.text3,
+                letterSpacing: 0.04)),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0x08FFFFFF),
+            borderRadius: BorderRadius.circular(8),
+            border:
+                Border.all(color: AppColors.hairline, width: 0.5),
+          ),
+          child: TextField(
+            controller: controller,
+            keyboardType: isNum
+                ? const TextInputType.numberWithOptions(decimal: true)
+                : TextInputType.text,
+            style: AppTheme.mono(fontSize: 13),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle:
+                  AppTheme.mono(fontSize: 13, color: AppColors.text4),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 8),
+              isDense: true,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CalcResultItem extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  const _CalcResultItem(
+      {required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: GoogleFonts.spaceGrotesk(
+                fontSize: 9, color: AppColors.text3, letterSpacing: 0.04)),
+        const SizedBox(height: 3),
+        Text(value,
+            style: AppTheme.mono(
+                fontSize: 14, fontWeight: FontWeight.w600, color: color)),
+      ],
+    );
+  }
+}
+
+// ── Slider widget ──────────────────────────────────────────────────────
 class _RiskSlider extends StatelessWidget {
   final String label, displayValue, helperLeft, helperRight;
   final double value, min, max;
@@ -401,8 +707,7 @@ class _RiskSlider extends StatelessWidget {
               inactiveTrackColor: AppColors.surface3,
               thumbColor: accentColor,
               overlayColor: accentColor.withValues(alpha: 0.15),
-              thumbShape:
-                  const RoundSliderThumbShape(enabledThumbRadius: 11),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 11),
               trackHeight: 4,
             ),
             child: Slider(
@@ -417,11 +722,9 @@ class _RiskSlider extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(helperLeft,
-                  style: AppTheme.mono(
-                      fontSize: 10, color: AppColors.text3)),
+                  style: AppTheme.mono(fontSize: 10, color: AppColors.text3)),
               Text(helperRight,
-                  style: AppTheme.mono(
-                      fontSize: 10, color: AppColors.text3)),
+                  style: AppTheme.mono(fontSize: 10, color: AppColors.text3)),
             ],
           ),
         ],

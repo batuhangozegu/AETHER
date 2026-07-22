@@ -1,17 +1,15 @@
 // lib/services/api_service.dart
 //
-// Spring Boot backend için hazır HTTP servisi.
-// Şu an mock data döndürüyor. Backend hazır olduğunda
-// sadece _useMock = false yaparak gerçek API'ye bağlanabilirsin.
-//
-// Base URL'i şu şekilde ayarla:
-//   - Geliştirme: http://localhost:8080
-//   - Üretim: https://api.borsa.app
+// Spring Boot backend için HTTP servisi.
+// Base URL:
+//   Geliştirme : http://192.168.68.242:8080  (veya --dart-define=API_BASE_URL=...)
+//   Üretim     : https://api.aether.app
 
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/asset.dart';
 import '../models/exchange_key.dart';
+import '../models/order.dart';
 import '../models/order_request.dart';
 import '../models/risk_profile.dart';
 import '../models/transaction.dart';
@@ -21,9 +19,6 @@ class ApiService {
     'API_BASE_URL',
     defaultValue: 'http://192.168.68.242:8080',
   );
-
-  // Mock modu kapalı — tüm endpoint'ler gerçek backend'e bağlı
-  static const bool _useMock = false;
 
   late final Dio _dio;
 
@@ -38,14 +33,14 @@ class ApiService {
       },
     ));
 
-    // Request/Response logging (sadece debug modda)
+    // Debug logging
     _dio.interceptors.add(LogInterceptor(
       requestBody: true,
       responseBody: true,
       error: true,
     ));
 
-    // Auth token interceptor (JWT için hazır)
+    // JWT interceptor — her isteğe token ekler, 401'de token siler
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final prefs = await SharedPreferences.getInstance();
@@ -55,104 +50,19 @@ class ApiService {
         }
         handler.next(options);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
         if (error.response?.statusCode == 401) {
-          // Token yenile veya login'e yönlendir
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('jwt_token');
         }
         handler.next(error);
       },
     ));
   }
 
-  // ── PORTFOLIO ──────────────────────────────────────────────────────
+  // ── AUTH ──────────────────────────────────────────────────────────────
 
-  /// GET /api/portfolio
-  Future<Portfolio> getPortfolio() async {
-    if (_useMock) return _mockPortfolio();
-    final res = await _dio.get('/api/portfolio');
-    return Portfolio.fromJson(res.data as Map<String, dynamic>);
-  }
-
-  /// GET /api/portfolio/holdings
-  Future<List<Asset>> getHoldings() async {
-    if (_useMock) return _mockHoldings();
-    final res = await _dio.get('/api/portfolio/holdings');
-    final list = res.data as List<dynamic>;
-    return list
-        .map((e) => Asset.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
-  // ── TRADE ──────────────────────────────────────────────────────────
-
-  /// GET /api/market/{symbol}/candles?interval=1d
-  Future<List<double>> getPriceHistory(String symbol,
-      {String interval = '1d'}) async {
-    if (_useMock) return _mockPriceHistory();
-    final res = await _dio.get(
-      '/api/market/$symbol/candles',
-      queryParameters: {'interval': interval},
-    );
-    final list = res.data as List<dynamic>;
-    return list.map((e) => (e as num).toDouble()).toList();
-  }
-
-  /// POST /api/orders
-  Future<void> placeOrder(OrderRequest order) async {
-    if (_useMock) {
-      await Future.delayed(const Duration(milliseconds: 800));
-      return;
-    }
-    await _dio.post('/api/orders', data: order.toJson());
-  }
-
-  // ── HISTORY ────────────────────────────────────────────────────────
-
-  /// GET /api/transactions?side=all&page=0&size=20
-  Future<List<Transaction>> getTransactions({
-    String side = 'all',
-    int page = 0,
-    int size = 20,
-  }) async {
-    if (_useMock) return _mockTransactions();
-    final res = await _dio.get(
-      '/api/transactions',
-      queryParameters: {'side': side, 'page': page, 'size': size},
-    );
-    final list = res.data as List<dynamic>;
-    return list
-        .map((e) => Transaction.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
-  // ── RISK PROFILE ───────────────────────────────────────────────────
-
-  /// GET /api/user/risk-profile
-  Future<RiskProfile> getRiskProfile() async {
-    if (_useMock) return const RiskProfile();
-    final res = await _dio.get('/api/user/risk-profile');
-    return RiskProfile.fromJson(res.data as Map<String, dynamic>);
-  }
-
-  /// PUT /api/user/risk-profile
-  Future<void> saveRiskProfile(RiskProfile profile) async {
-    if (_useMock) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      return;
-    }
-    await _dio.put('/api/user/risk-profile', data: profile.toJson());
-  }
-
-  // ── USER / PROFILE ─────────────────────────────────────────────────
-
-  /// GET /api/user/me
-  Future<User> getUser() async {
-    if (_useMock) return _mockUser();
-    final res = await _dio.get('/api/user/me');
-    return User.fromJson(res.data as Map<String, dynamic>);
-  }
-
-  /// POST /api/v1/auth/login  →  { email, password }
+  /// POST /api/v1/auth/login
   Future<String> login(String email, String password) async {
     final res = await _dio.post('/api/v1/auth/login', data: {
       'email': email,
@@ -164,7 +74,7 @@ class ApiService {
     return token;
   }
 
-  /// POST /api/v1/auth/register  →  { username, email, password }
+  /// POST /api/v1/auth/register
   Future<String> register(String username, String email, String password) async {
     final res = await _dio.post('/api/v1/auth/register', data: {
       'username': username,
@@ -177,13 +87,19 @@ class ApiService {
     return token;
   }
 
-  /// POST /api/auth/logout
+  /// Token'ı sil (logout)
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('jwt_token');
   }
 
-  // ── EXCHANGE KEYS ───────────────────────────────────────────────────
+  Future<bool> isAuthenticated() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    return token != null && token.isNotEmpty;
+  }
+
+  // ── EXCHANGE KEYS ──────────────────────────────────────────────────────
 
   /// GET /api/v1/exchanges
   Future<List<ExchangeKeyModel>> getExchangeKeys() async {
@@ -217,14 +133,95 @@ class ApiService {
     await _dio.delete('/api/v1/exchanges/$id');
   }
 
-  /// Check if user has token in SharedPreferences
-  Future<bool> isAuthenticated() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token');
-    return token != null && token.isNotEmpty;
+  // ── EXCHANGE (BALANCE) ─────────────────────────────────────────────────
+
+  /// GET /api/v1/exchange/{id}/balance?asset=USDT
+  Future<double> getExchangeBalance(String exchangeKeyId, String asset) async {
+    final res = await _dio.get(
+      '/api/v1/exchange/$exchangeKeyId/balance',
+      queryParameters: {'asset': asset},
+    );
+    return (res.data as num).toDouble();
   }
 
-  // ── MOCK DATA ──────────────────────────────────────────────────────
+  // ── RISK PROFILE ───────────────────────────────────────────────────────
+
+  /// GET /api/v1/risk/profile
+  Future<RiskProfile> getRiskProfile() async {
+    final res = await _dio.get('/api/v1/risk/profile');
+    return RiskProfile.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// PUT /api/v1/risk/profile
+  Future<RiskProfile> saveRiskProfile(RiskProfile profile) async {
+    final res = await _dio.put(
+      '/api/v1/risk/profile',
+      data: profile.toJson(),
+    );
+    return RiskProfile.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// POST /api/v1/risk/calculate
+  /// { symbol, entryPrice, stopLossPrice, accountBalance }
+  Future<RiskCalculationResult> calculateRisk(RiskCalculationPayload payload) async {
+    final res = await _dio.post(
+      '/api/v1/risk/calculate',
+      data: payload.toJson(),
+    );
+    return RiskCalculationResult.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  // ── TRADES ─────────────────────────────────────────────────────────────
+
+  /// GET /api/v1/trades/active
+  Future<List<OrderModel>> getActiveOrders() async {
+    final res = await _dio.get('/api/v1/trades/active');
+    final list = res.data as List<dynamic>;
+    return list
+        .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// POST /api/v1/trades/order
+  Future<OrderModel> createOrder(CreateOrderPayload payload) async {
+    final res = await _dio.post('/api/v1/trades/order', data: payload.toJson());
+    return OrderModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// POST /api/v1/trades/{id}/close
+  Future<OrderModel> closeOrder(String orderId) async {
+    final res = await _dio.post('/api/v1/trades/$orderId/close');
+    return OrderModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  // ── PORTFOLIO / MARKET (mock — backend'de henüz yok) ──────────────────
+
+  Future<Portfolio> getPortfolio() async {
+    return _mockPortfolio();
+  }
+
+  Future<List<Asset>> getHoldings() async {
+    return _mockHoldings();
+  }
+
+  Future<List<double>> getPriceHistory(String symbol,
+      {String interval = '1d'}) async {
+    return _mockPriceHistory();
+  }
+
+  Future<List<Transaction>> getTransactions({
+    String side = 'all',
+    int page = 0,
+    int size = 20,
+  }) async {
+    return _mockTransactions();
+  }
+
+  Future<User> getUser() async {
+    return _mockUser();
+  }
+
+  // ── MOCK DATA ──────────────────────────────────────────────────────────
 
   Portfolio _mockPortfolio() => const Portfolio(
         balance: 84273.52,
