@@ -3,7 +3,8 @@ package com.aether.borsa.service.impl;
 import com.aether.borsa.model.entity.ExchangeKey;
 import com.aether.borsa.repository.ExchangeKeyRepository;
 import com.aether.borsa.service.ExchangeService;
-import com.aether.borsa.service.exchange.BinanceExchangeClient;
+import com.aether.borsa.service.exchange.ExchangeClientFactory;
+import com.aether.borsa.service.exchange.IExchangeClient;
 import com.aether.borsa.util.EncryptionUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,7 +18,7 @@ public class ExchangeServiceImpl implements ExchangeService {
 
     private final ExchangeKeyRepository exchangeKeyRepository;
     private final EncryptionUtil encryptionUtil;
-    private final BinanceExchangeClient binanceExchangeClient;
+    private final ExchangeClientFactory exchangeClientFactory;
 
     @Override
     public BigDecimal getBalance(UUID userId, UUID exchangeKeyId, String asset) {
@@ -33,7 +34,8 @@ public class ExchangeServiceImpl implements ExchangeService {
             String apiKey = encryptionUtil.decrypt(exchangeKey.getEncryptedApiKey());
             String secretKey = encryptionUtil.decrypt(exchangeKey.getEncryptedSecretKey());
 
-            return binanceExchangeClient.getBalance(apiKey, secretKey, asset);
+            IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
+            return client.getBalance(apiKey, secretKey, asset);
         } catch (Exception e){
             throw new RuntimeException("Şifre çözme işlemi başarısız:" + e.getMessage());
         }
