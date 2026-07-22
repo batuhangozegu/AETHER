@@ -39,6 +39,7 @@ public class RiskProfileServiceImpl implements RiskProfileService {
         profile.setRiskPerTradePct(request.getRiskPerTradePct());
         profile.setTargetRr(request.getTargetRr());
         profile.setAutoStopLossEnabled(request.isAutoStopLossEnabled());
+        profile.setMaxOpenPositions(request.getMaxOpenPositions());
 
         RiskProfile updated = riskProfileRepository.save(profile);
         return mapToResponse(updated);
@@ -79,6 +80,7 @@ public class RiskProfileServiceImpl implements RiskProfileService {
                 .dailyLossCapPct(new BigDecimal("5.0"))
                 .targetRr(new BigDecimal("2.0"))
                 .autoStopLossEnabled(false)
+                .maxOpenPositions(5)
                 .build();
 
         return riskProfileRepository.save(riskProfile);
@@ -90,7 +92,8 @@ public class RiskProfileServiceImpl implements RiskProfileService {
                 profile.getRiskPerTradePct(),
                 profile.getDailyLossCapPct(),
                 profile.getTargetRr(),
-                profile.isAutoStopLossEnabled()
+                profile.isAutoStopLossEnabled(),
+                profile.getMaxOpenPositions()
         );
     }
 

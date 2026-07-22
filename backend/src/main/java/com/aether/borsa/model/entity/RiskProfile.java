@@ -35,4 +35,7 @@ public class RiskProfile {
     @Column(name = "auto_stop_loss_enabled")
     private boolean autoStopLossEnabled;
 
+    @Column(name = "max_open_positions")
+    private Integer maxOpenPositions;
+
 }

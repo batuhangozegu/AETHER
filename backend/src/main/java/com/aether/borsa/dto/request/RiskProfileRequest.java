@@ -18,4 +18,6 @@ public class RiskProfileRequest {
     private BigDecimal targetRr;
 
     private boolean autoStopLossEnabled;
+
+    private Integer maxOpenPositions;
 }

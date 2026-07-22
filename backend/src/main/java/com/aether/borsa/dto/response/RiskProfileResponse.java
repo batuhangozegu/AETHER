@@ -16,5 +16,6 @@ public class RiskProfileResponse {
     private BigDecimal dailyLossCapPct;
     private BigDecimal targetRr;
     private Boolean autoStopLossEnabled;
+    private Integer maxOpenPositions;
 
 }
