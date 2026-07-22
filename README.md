@@ -19,10 +19,29 @@ sağlam bir backend geliştirme altyapısı oluşturmaktır.
 - Java 21 / Spring Boot 4.x
 - Spring Security + JWT
 - AES-256 API Key şifreleme
+- Flyway (veritabanı migration yönetimi)
 
-**Veritabanı & Cache**
+**Veritabanı**
 - PostgreSQL
-- Redis
 
 **Mobil**
 - Flutter
+
+## Tamamlanan Özellikler
+
+- **Kimlik Doğrulama** — JWT tabanlı authentication, kullanıcı kayıt/giriş
+- **Borsa API Anahtarı Yönetimi** — AES-256 ile şifrelenmiş API key saklama, ekleme/listeleme/silme
+- **Risk Yönetimi** — kullanıcıya özel risk profili (risk yüzdesi, günlük kayıp limiti, hedef risk/ödül oranı), işlem öncesi lot büyüklüğü hesaplama
+- **Emir Yönetimi** — pozisyon açma/kapatma, aktif pozisyonları listeleme
+
+## Planlanan Özellikler
+
+- Portföy servisi (bakiye, kâr/zarar takibi)
+- Gerçek borsa entegrasyonu (Binance/Bybit API'leri ile emir senkronizasyonu)
+- Piyasa verisi servisi ve WebSocket ile canlı fiyat akışı (Redis cache ile)
+- Bildirim sistemi
+- İki faktörlü doğrulama (2FA)
+
+## Kurulum
+
+*(Yakında eklenecek)*
