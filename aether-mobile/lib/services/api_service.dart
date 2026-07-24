@@ -17,7 +17,7 @@ import '../models/transaction.dart';
 class ApiService {
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.68.242:8080',
+    defaultValue: 'http://10.0.2.2:8080',
   );
 
   late final Dio _dio;

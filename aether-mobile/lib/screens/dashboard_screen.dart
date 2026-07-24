@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/asset.dart';
 import '../providers/app_providers.dart';
-import '../services/api_service.dart';
+import '../providers/api_keys_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
@@ -14,16 +14,37 @@ import '../widgets/sparkline_chart.dart';
 import 'markets_screen.dart';
 import 'notifications_screen.dart';
 import 'portfolio_breakdown_screen.dart';
+import 'profile_screen.dart';
 
 // ── Providers ──────────────────────────────────────────────────────────
-final _apiProvider = Provider((_) => ApiService());
 
-final portfolioProvider = FutureProvider((ref) {
-  return ref.watch(_apiProvider).getPortfolio();
+/// Her exchange key'in USDT bakiyesini çekip toplar → gerçek portföy
+final realPortfolioProvider = FutureProvider<Portfolio>((ref) async {
+  final apiService = ref.watch(apiServiceProvider);
+  final keysAsync  = ref.watch(apiKeysProvider);
+
+  // Key'ler yüklenene kadar bekle
+  final keys = keysAsync.valueOrNull ?? [];
+
+  if (keys.isEmpty) {
+    return const Portfolio(balance: 0, pnl24h: 0, pnl24hPercent: 0);
+  }
+
+  // Her exchange key için USDT bakiyesi çek, hataları yoksay
+  double total = 0;
+  for (final key in keys) {
+    try {
+      final bal = await apiService.getExchangeBalance(key.id, 'USDT');
+      total += bal;
+    } catch (_) {}
+  }
+
+  return Portfolio(balance: total, pnl24h: 0, pnl24hPercent: 0);
 });
 
-final holdingsProvider = FutureProvider((ref) {
-  return ref.watch(_apiProvider).getHoldings();
+// Mock holdings — ileride gerçek API'ye bağlanabilir
+final holdingsProvider = FutureProvider<List<Asset>>((ref) async {
+  return ref.watch(apiServiceProvider).getHoldings();
 });
 
 // ── Screen ─────────────────────────────────────────────────────────────
@@ -32,7 +53,7 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final portfolioAsync = ref.watch(portfolioProvider);
+    final portfolioAsync = ref.watch(realPortfolioProvider);
     final holdingsAsync = ref.watch(holdingsProvider);
 
     return Scaffold(
@@ -274,7 +295,26 @@ class DashboardScreen extends ConsumerWidget {
                   child:
                       CircularProgressIndicator(color: AppColors.accent)),
             ),
-            error: (_, __) => const SizedBox(height: 70),
+            error: (e, _) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('\$0.00',
+                    style: AppTheme.mono(fontSize: 42, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const ProfileScreen())),
+                  child: Row(children: [
+                    const Icon(Icons.add_circle_outline, color: AppColors.accent, size: 14),
+                    const SizedBox(width: 6),
+                    Text('Exchange API anahtarı ekle',
+                        style: GoogleFonts.spaceGrotesk(
+                            fontSize: 12, color: AppColors.accent,
+                            fontWeight: FontWeight.w500)),
+                  ]),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 28),
         ],
