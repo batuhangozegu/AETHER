@@ -2,19 +2,29 @@ package com.aether.borsa.service.impl;
 
 import com.aether.borsa.dto.request.RiskCalculationRequest;
 import com.aether.borsa.dto.request.RiskProfileRequest;
+import com.aether.borsa.dto.response.AssetAllocationResponse;
 import com.aether.borsa.dto.response.RiskCalculationResponse;
 import com.aether.borsa.dto.response.RiskProfileResponse;
+import com.aether.borsa.model.entity.ExchangeKey;
 import com.aether.borsa.model.entity.RiskProfile;
 import com.aether.borsa.model.entity.User;
+import com.aether.borsa.repository.ExchangeKeyRepository;
 import com.aether.borsa.repository.RiskProfileRepository;
 import com.aether.borsa.repository.UserRepository;
+import com.aether.borsa.service.ExchangeService;
 import com.aether.borsa.service.RiskProfileService;
+import com.aether.borsa.service.exchange.ExchangeClientFactory;
+import com.aether.borsa.service.exchange.IExchangeClient;
 import lombok.RequiredArgsConstructor;
+import org.knowm.xchange.Exchange;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +32,9 @@ public class RiskProfileServiceImpl implements RiskProfileService {
 
     private final RiskProfileRepository riskProfileRepository;
     private final UserRepository userRepository;
+    private final ExchangeService exchangeService;
+    private final ExchangeKeyRepository exchangeKeyRepository;
+    private final ExchangeClientFactory exchangeClientFactory;
 
     @Override
     public RiskProfileResponse getProfile(UUID userId) {
@@ -100,6 +113,18 @@ public class RiskProfileServiceImpl implements RiskProfileService {
     private RiskProfile findOrCreateProfile(UUID userId) {
         return riskProfileRepository.findById(userId)
                 .orElseGet(() -> createDefaultProfile(userId));
+    }
+
+    private BigDecimal getUsdValue(String symbol, BigDecimal amount, IExchangeClient client) {
+        if (symbol.equals("USDT")) {
+            return amount;
+        } else {
+
+            BigDecimal price = client.getCurrentPrice(symbol + "USDT");
+            BigDecimal total = price.multiply(amount);
+            return total;
+
+        }
     }
 
 }

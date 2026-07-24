@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -40,5 +41,28 @@ public class ExchangeServiceImpl implements ExchangeService {
             throw new RuntimeException("Şifre çözme işlemi başarısız:" + e.getMessage());
         }
 
+    }
+
+    @Override
+    public Map<String, BigDecimal> getAllBalances(UUID userId, UUID exchangeKeyId) {
+
+        ExchangeKey exchangeKey = exchangeKeyRepository.findById(exchangeKeyId).orElseThrow(() -> new RuntimeException("Borsa bağlantısı bulunamadı."));
+
+        if(!exchangeKey.getUser().getId().equals(userId)){
+            throw new RuntimeException("Bu borsa bağlantısına erişim yetkiniz yok.");
+        }
+        try {
+
+            String apiKey = encryptionUtil.decrypt(exchangeKey.getEncryptedApiKey());
+            String secretKey = encryptionUtil.decrypt(exchangeKey.getEncryptedSecretKey());
+
+            IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
+
+
+            return client.getAllBalances(apiKey, secretKey);
+
+        }catch (Exception e){
+            throw new RuntimeException("Şifre çözme işlemi başarısız:" + e.getMessage());
+        }
     }
 }

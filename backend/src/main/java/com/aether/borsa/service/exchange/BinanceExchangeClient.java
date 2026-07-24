@@ -12,6 +12,8 @@ import org.knowm.xchange.dto.marketdata.Ticker;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 public class BinanceExchangeClient implements IExchangeClient {
@@ -57,6 +59,34 @@ public class BinanceExchangeClient implements IExchangeClient {
 
         } catch (Exception e) {
             throw new RuntimeException("Fiyat bilgisi alınamadı: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public Map<String, BigDecimal> getAllBalances(String apiKey, String secretKey) {
+        try {
+            ExchangeSpecification exSpec = new BinanceExchange().getDefaultExchangeSpecification();
+            exSpec.setApiKey(apiKey);
+            exSpec.setSecretKey(secretKey);
+            exSpec.setExchangeSpecificParametersItem(BinanceExchange.EXCHANGE_TYPE, ExchangeType.SPOT);
+            exSpec.setExchangeSpecificParametersItem("Use_Sandbox", true);
+
+            Exchange exchange = ExchangeFactory.INSTANCE.createExchange(exSpec);
+            AccountInfo accountInfo = exchange.getAccountService().getAccountInfo();
+
+            Map<String, BigDecimal> balances = new HashMap<>();
+
+            accountInfo.getWallet().getBalances().forEach((currency, balance) -> {
+                BigDecimal amount = balance.getAvailable();
+                if (amount.compareTo(BigDecimal.ZERO) > 0) {
+                    balances.put(currency.getCurrencyCode(), amount);
+                }
+            });
+
+            return balances;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Bakiyeler alınamadı: " + e.getMessage(), e);
         }
     }
 
