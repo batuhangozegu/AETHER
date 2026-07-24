@@ -62,6 +62,9 @@ public class Order {
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
+    @Column(name = "exit_price")
+    private BigDecimal exitPrice;
+
     @PrePersist
     protected void onCreate(){
         this.createdAt = LocalDateTime.now();

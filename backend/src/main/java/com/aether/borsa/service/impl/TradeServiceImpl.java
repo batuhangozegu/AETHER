@@ -75,15 +75,16 @@ public class TradeServiceImpl implements TradeService {
 
     @Override
     public OrderResponse closeOrder(UUID userId, UUID orderId) {
-
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new RuntimeException("Order bulunamadı"));
+
+        IExchangeClient client = exchangeClientFactory.getClient(order.getExchangeKey().getExchangeName());
+        BigDecimal currentPrice = client.getCurrentPrice(order.getSymbol());
+
         order.setStatus(OrderStatus.CLOSED);
         order.setClosedAt(LocalDateTime.now());
+        order.setExitPrice(currentPrice);
 
         Order updated = orderRepository.save(order);
-
-        IExchangeClient client = exchangeClientFactory.getClient(updated.getExchangeKey().getExchangeName());
-        BigDecimal currentPrice = client.getCurrentPrice(updated.getSymbol());
 
         return mapToResponse(updated, currentPrice);
     }
