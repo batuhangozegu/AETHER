@@ -6,10 +6,12 @@ import com.aether.borsa.model.entity.ExchangeKey;
 import com.aether.borsa.model.entity.Order;
 import com.aether.borsa.model.entity.User;
 import com.aether.borsa.model.enums.TradeSide;
+import com.aether.borsa.repository.ExchangeKeyRepository;
 import com.aether.borsa.repository.OrderRepository;
 import com.aether.borsa.repository.UserRepository;
 import com.aether.borsa.service.ExchangeService;
 import com.aether.borsa.service.PortfolioService;
+import com.aether.borsa.service.exchange.ExchangeClientFactory;
 import com.aether.borsa.service.exchange.IExchangeClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,8 @@ public class PortfolioServiceImpl implements PortfolioService {
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final ExchangeService exchangeService;
+    private final ExchangeKeyRepository exchangeKeyRepository;
+    private final ExchangeClientFactory exchangeClientFactory;
 
     @Override
     public PortfolioSummaryResponse getSummary(UUID userId, UUID exchangeKeyId) {
