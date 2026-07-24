@@ -3,17 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/transaction.dart';
-import '../services/api_service.dart';
+import '../providers/app_providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/coin_avatar.dart';
 
 // ── Provider ───────────────────────────────────────────────────────────
-final _historyApiProvider = Provider((_) => ApiService());
-
+/// GET /api/v1/trades/active → aktif emirleri Transaction olarak döndürür
 final transactionsProvider = FutureProvider((ref) {
-  return ref.watch(_historyApiProvider).getTransactions();
+  return ref.watch(apiServiceProvider).getTransactions();
 });
 
 final historyFilterProvider = StateProvider<String>((_) => 'all');

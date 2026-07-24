@@ -33,6 +33,33 @@ class Transaction {
         total: (json['total'] as num).toDouble(),
       );
 
+  /// OrderModel'den dönüştür.
+  /// Backend: { id, symbol, side, amount, currentPnL, createdAt }
+  factory Transaction.fromOrder(dynamic order) {
+    final createdAt = (order.createdAt as String?) ?? '';
+    String date = '';
+    String time = '';
+    if (createdAt.isNotEmpty) {
+      final parts = createdAt.split('T');
+      date = parts.isNotEmpty ? parts[0] : createdAt;
+      if (parts.length > 1) {
+        time = parts[1].length >= 5 ? parts[1].substring(0, 5) : parts[1];
+      }
+    }
+    final side = (order.side as String).toUpperCase() == 'BUY' ? 'buy' : 'sell';
+    final pnl = (order.currentPnL as double?) ?? 0.0;
+    return Transaction(
+      id:     order.id as String,
+      date:   date,
+      time:   time,
+      side:   side,
+      symbol: order.symbol as String,
+      price:  0.0,
+      amount: (order.amount as double),
+      total:  pnl.abs(),
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'date': date,

@@ -54,9 +54,34 @@ class Portfolio {
     required this.pnl24hPercent,
   });
 
-  factory Portfolio.fromJson(Map<String, dynamic> json) => Portfolio(
-        balance: (json['balance'] as num).toDouble(),
-        pnl24h: (json['pnl24h'] as num).toDouble(),
-        pnl24hPercent: (json['pnl24hPercent'] as num).toDouble(),
+  /// Backend: { totalBalanceUsd, dailyPnlUsd, dailyPnlPct }
+  factory Portfolio.fromBackend(Map<String, dynamic> json) => Portfolio(
+        balance: (json['totalBalanceUsd'] as num).toDouble(),
+        pnl24h: (json['dailyPnlUsd'] as num).toDouble(),
+        pnl24hPercent: (json['dailyPnlPct'] as num).toDouble(),
+      );
+}
+
+// ── AssetAllocation ─────────────────────────────────────────────────────
+/// Backend: GET /api/v1/portfolio/breakdown?exchangeKeyId=
+/// { symbol, amount, usdValue, allocationPct }
+class AssetAllocation {
+  final String symbol;
+  final double amount;
+  final double usdValue;
+  final double allocationPct;
+
+  const AssetAllocation({
+    required this.symbol,
+    required this.amount,
+    required this.usdValue,
+    required this.allocationPct,
+  });
+
+  factory AssetAllocation.fromJson(Map<String, dynamic> json) => AssetAllocation(
+        symbol:        json['symbol'] as String,
+        amount:        (json['amount'] as num).toDouble(),
+        usdValue:      (json['usdValue'] as num).toDouble(),
+        allocationPct: (json['allocationPct'] as num).toDouble(),
       );
 }

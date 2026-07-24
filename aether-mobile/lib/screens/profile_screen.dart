@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_providers.dart';
 import '../providers/api_keys_provider.dart';
-import '../services/api_service.dart';
+import '../models/order_request.dart'; // User sınıfı
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/delta_pill.dart';
@@ -14,9 +14,18 @@ import '../widgets/settings_toggle_row.dart';
 import 'add_api_key_screen.dart';
 import 'two_factor_setup_screen.dart';
 
-// ── User provider ───────────────────────────────────────────────────────
-final _profileApiProvider = Provider((_) => ApiService());
-final userProvider = FutureProvider((ref) => ref.watch(_profileApiProvider).getUser());
+// ── User provider ──────────────────────────────────────────────────────────
+/// Backend'de /me endpoint'i henüz yok.
+/// Kullanıcı adı/email düzenleme ile local override destekleniyor.
+final userProvider = Provider<User>((_) => const User(
+  id:           'local',
+  name:         'Kullanıcı',
+  email:        '',
+  initials:     'K',
+  kycVerified:  false,
+  totalBalance: 0,
+  pnlPercent:   0,
+));
 
 // ── Local display name (editable until backend ready) ───────────────────
 final _localNameProvider  = StateProvider<String?>((_) => null);
@@ -43,7 +52,7 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userAsync    = ref.watch(userProvider);
+    final user         = ref.watch(userProvider);
     final prefs        = ref.watch(prefsProvider);
     final prefsN       = ref.read(prefsProvider.notifier);
     final locale       = ref.watch(languageProvider);
@@ -69,8 +78,6 @@ class ProfileScreen extends ConsumerWidget {
                 const Spacer(),
                 GestureDetector(
                   onTap: () async {
-                    final user = userAsync.valueOrNull;
-                    if (user == null) return;
                     final result = await showProfileEditSheet(
                       context,
                       name: localName ?? user.name,
@@ -95,26 +102,17 @@ class ProfileScreen extends ConsumerWidget {
             ),
 
             // ── Avatar + name ──────────────────────────────────────────
-            userAsync.when(
-              data: (user) {
-                final name  = localName  ?? user.name;
-                final email = localEmail ?? user.email;
-                final initials = name.trim().split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase();
-                return _ProfileHeader(initials: initials, name: name, email: email, kycVerified: user.kycVerified);
-              },
-              loading: () => const Padding(padding: EdgeInsets.all(40),
-                  child: Center(child: CircularProgressIndicator(color: AppColors.accent))),
-              error: (_, __) => const SizedBox(height: 120),
-            ),
+            Builder(builder: (_) {
+              final name  = localName  ?? user.name;
+              final email = localEmail ?? user.email;
+              final initials = name.trim().split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase();
+              return _ProfileHeader(initials: initials.isEmpty ? 'K' : initials, name: name, email: email, kycVerified: user.kycVerified);
+            }),
 
             // ── Asset card ─────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
-              child: userAsync.when(
-                data: (u) => _AssetCard(balance: u.totalBalance, pnl: u.pnlPercent),
-                loading: () => const SizedBox(height: 80),
-                error: (_, __) => const SizedBox(height: 80),
-              ),
+              child: _AssetCard(balance: user.totalBalance, pnl: user.pnlPercent),
             ),
 
             // ── Güvenlik ───────────────────────────────────────────────

@@ -2,15 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/asset.dart';
+import '../models/asset.dart'; // Portfolio sınıfı için
 import '../providers/app_providers.dart';
 import '../providers/api_keys_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
-import '../widgets/coin_avatar.dart';
 import '../widgets/delta_pill.dart';
-import '../widgets/sparkline_chart.dart';
 import 'markets_screen.dart';
 import 'notifications_screen.dart';
 import 'portfolio_breakdown_screen.dart';
@@ -18,33 +16,32 @@ import 'profile_screen.dart';
 
 // ── Providers ──────────────────────────────────────────────────────────
 
-/// Her exchange key'in USDT bakiyesini çekip toplar → gerçek portföy
+/// İlk exchange key'in portfolio summary'sini çeker.
+/// GET /api/v1/portfolio/summary?exchangeKeyId=
+/// Exchange key yoksa sıfır portfolio döner.
 final realPortfolioProvider = FutureProvider<Portfolio>((ref) async {
   final apiService = ref.watch(apiServiceProvider);
   final keysAsync  = ref.watch(apiKeysProvider);
-
-  // Key'ler yüklenene kadar bekle
   final keys = keysAsync.valueOrNull ?? [];
 
   if (keys.isEmpty) {
     return const Portfolio(balance: 0, pnl24h: 0, pnl24hPercent: 0);
   }
 
-  // Her exchange key için USDT bakiyesi çek, hataları yoksay
-  double total = 0;
-  for (final key in keys) {
-    try {
-      final bal = await apiService.getExchangeBalance(key.id, 'USDT');
-      total += bal;
-    } catch (_) {}
+  // İlk aktif key'i kullan; hata olursa exchange balance fallback
+  try {
+    return await apiService.getPortfolioSummary(keys.first.id);
+  } catch (_) {
+    // Portfolio summary başarısız olursa bakiye-only fallback
+    double total = 0;
+    for (final key in keys) {
+      try {
+        final bal = await apiService.getExchangeBalance(key.id, 'USDT');
+        total += bal;
+      } catch (_) {}
+    }
+    return Portfolio(balance: total, pnl24h: 0, pnl24hPercent: 0);
   }
-
-  return Portfolio(balance: total, pnl24h: 0, pnl24hPercent: 0);
-});
-
-// Mock holdings — ileride gerçek API'ye bağlanabilir
-final holdingsProvider = FutureProvider<List<Asset>>((ref) async {
-  return ref.watch(apiServiceProvider).getHoldings();
 });
 
 // ── Screen ─────────────────────────────────────────────────────────────
@@ -54,7 +51,6 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final portfolioAsync = ref.watch(realPortfolioProvider);
-    final holdingsAsync = ref.watch(holdingsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
@@ -80,76 +76,42 @@ class DashboardScreen extends ConsumerWidget {
               // Header (ref geçiriliyor — profil butonu için)
               SliverToBoxAdapter(
                   child: _buildHeader(context, ref, portfolioAsync)),
-              // Yeni İşlem butonu
+              // Hızlı İşlemler
               SliverToBoxAdapter(child: _buildQuickAction(context, ref)),
-              // Varlıklar başlığı
+              // Portföy Dağılımı butonu
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 6),
+                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
                   child: GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PortfolioBreakdownScreen())),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          'VARLIKLARİM',
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.11,
-                            color: AppColors.text3,
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const PortfolioBreakdownScreen())),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface1,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.hairline, width: 0.5),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.donut_small_rounded, color: AppColors.accent, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Portföy Dağılımı',
+                                    style: GoogleFonts.spaceGrotesk(
+                                        fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+                                Text('Varlık yüzdeleri ve risk analizi',
+                                    style: GoogleFonts.spaceGrotesk(fontSize: 11, color: AppColors.text3)),
+                              ],
+                            ),
                           ),
-                        ),
-                        holdingsAsync.when(
-                          data: (h) => Row(
-                            children: [
-                              Text(
-                                '${h.length} coin',
-                                style: GoogleFonts.spaceGrotesk(
-                                    fontSize: 12, color: AppColors.text3),
-                              ),
-                              const Icon(Icons.chevron_right,
-                                  size: 14, color: AppColors.text3),
-                            ],
-                          ),
-                          loading: () => const SizedBox.shrink(),
-                          error: (_, __) => const SizedBox.shrink(),
-                        ),
-                      ],
+                          const Icon(Icons.chevron_right, color: AppColors.text3, size: 18),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-              ),
-              // Varlık listesi
-              holdingsAsync.when(
-                data: (holdings) => SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) => Padding(
-                      padding: EdgeInsets.fromLTRB(
-                          22,
-                          i == 0 ? 0 : 3,
-                          22,
-                          i == holdings.length - 1 ? 24 : 3),
-                      child: _AssetCard(asset: holdings[i]),
-                    ),
-                    childCount: holdings.length,
-                  ),
-                ),
-                loading: () => const SliverToBoxAdapter(
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(40),
-                      child: CircularProgressIndicator(
-                          color: AppColors.accent),
-                    ),
-                  ),
-                ),
-                error: (e, _) => SliverToBoxAdapter(
-                  child: Center(
-                    child: Text('Hata: $e',
-                        style: const TextStyle(color: AppColors.loss)),
                   ),
                 ),
               ),
@@ -359,78 +321,6 @@ class DashboardScreen extends ConsumerWidget {
           ),
         )),
       ]),
-    );
-  }
-}
-
-// ── Varlık kartı ────────────────────────────────────────────────────────
-class _AssetCard extends StatelessWidget {
-  final Asset asset;
-
-  const _AssetCard({required this.asset});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.hairline, width: 0.5),
-      ),
-      child: Row(
-        children: [
-          CoinAvatar(symbol: asset.symbol, size: 36),
-          const SizedBox(width: 10),
-          // Sol: isim + ort fiyat
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  asset.symbol,
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.text1,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'ort. \$${Formatters.price(asset.avgPrice)}',
-                  style: AppTheme.mono(
-                      fontSize: 11, color: AppColors.text3),
-                ),
-              ],
-            ),
-          ),
-          // Orta: sparkline + değer
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              SparklineChart(
-                points: asset.sparkline,
-                color:
-                    asset.isProfit ? AppColors.profit : AppColors.loss,
-                width: 44,
-                height: 18,
-              ),
-              const SizedBox(height: 3),
-              Text(
-                Formatters.moneyCompact(asset.value),
-                style: AppTheme.mono(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
-          // Sağ: delta pill
-          DeltaPill(value: asset.pnlPercent),
-        ],
-      ),
     );
   }
 }

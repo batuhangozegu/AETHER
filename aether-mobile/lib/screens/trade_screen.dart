@@ -17,8 +17,9 @@ import '../widgets/glass_card.dart';
 import '../widgets/trade_dialogs.dart';
 
 // ── Providers ──────────────────────────────────────────────────────────
-final priceHistoryProvider = FutureProvider((ref) {
-  return ref.watch(apiServiceProvider).getPriceHistory('BTC');
+/// Fiyat geçmişi — Market Service (Faz 7) gelmeden önce sabit mock
+final priceHistoryProvider = FutureProvider<List<double>>((ref) async {
+  return const [62, 63.5, 62.8, 64.2, 65.1, 64.5, 66.3, 65.8, 67.0, 66.4, 67.8, 68.2, 67.6, 68.9, 67.234];
 });
 
 // ── State ──────────────────────────────────────────────────────────────
