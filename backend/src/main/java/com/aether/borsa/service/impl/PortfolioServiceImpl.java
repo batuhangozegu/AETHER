@@ -105,5 +105,17 @@ public class PortfolioServiceImpl implements PortfolioService {
         return diff.multiply(order.getAmount());
     }
 
+    private BigDecimal getUsdValue(String symbol, BigDecimal amount, IExchangeClient client) {
+        if (symbol.equals("USDT")) {
+            return amount;
+        } else {
+
+            BigDecimal price = client.getCurrentPrice(symbol + "USDT");
+            BigDecimal total = price.multiply(amount);
+            return total;
+
+        }
+    }
+
 
 }
