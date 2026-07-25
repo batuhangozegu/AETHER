@@ -1,5 +1,8 @@
 package com.aether.borsa.service.exchange;
 
+import com.aether.borsa.dto.response.CandleResponse;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.knowm.xchange.Exchange;
 import org.knowm.xchange.ExchangeFactory;
 import org.knowm.xchange.ExchangeSpecification;
@@ -10,9 +13,15 @@ import org.knowm.xchange.dto.account.AccountInfo;
 import org.knowm.xchange.dto.account.Balance;
 import org.knowm.xchange.dto.marketdata.Ticker;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -109,6 +118,42 @@ public class BinanceExchangeClient implements IExchangeClient {
 
         } catch (Exception e) {
             throw new RuntimeException("Ticker bilgisi alınamadı: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public List<CandleResponse> getCandles(String symbol, String timeframe) {
+        try {
+            String url = "https://testnet.binance.vision/api/v3/klines"
+                    + "?symbol=" + symbol
+                    + "&interval=" + timeframe
+                    + "&limit=100";
+
+            RestTemplate restTemplate = new RestTemplate();
+            ObjectMapper mapper = new ObjectMapper();
+
+            String response = restTemplate.getForObject(url, String.class);
+            JsonNode root = mapper.readTree(response);
+
+            List<CandleResponse> candles = new ArrayList<>();
+
+            for (JsonNode candle : root) {
+                long openTimeMillis = candle.get(0).asLong();
+                LocalDateTime timestamp = LocalDateTime.ofInstant(
+                        Instant.ofEpochMilli(openTimeMillis), ZoneId.systemDefault());
+
+                BigDecimal open = new BigDecimal(candle.get(1).asText());
+                BigDecimal high = new BigDecimal(candle.get(2).asText());
+                BigDecimal low = new BigDecimal(candle.get(3).asText());
+                BigDecimal close = new BigDecimal(candle.get(4).asText());
+
+                candles.add(new CandleResponse(timestamp, open, high, low, close));
+            }
+
+            return candles;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Mum verisi alınamadı: " + e.getMessage(), e);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.aether.borsa.service.impl;
 
+import com.aether.borsa.dto.response.CandleResponse;
 import com.aether.borsa.dto.response.CoinResponse;
 import com.aether.borsa.model.entity.ExchangeKey;
 import com.aether.borsa.repository.ExchangeKeyRepository;
@@ -32,5 +33,15 @@ public class MarketServiceImpl implements MarketService {
                     TickerInfo info = client.getTickerInfo(symbol + "USDT");
                     return new CoinResponse(symbol, info.getPrice(), info.getPriceChangePercent());
                 }).toList();
+    }
+
+    @Override
+    public List<CandleResponse> getCandles(UUID exchangeKeyId, String symbol, String timeframe) {
+        ExchangeKey exchangeKey = exchangeKeyRepository.findById(exchangeKeyId)
+                .orElseThrow(() -> new RuntimeException("Borsa bağlantısı bulunamadı."));
+
+        IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
+
+        return client.getCandles(symbol, timeframe);
     }
 }
