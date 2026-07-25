@@ -33,8 +33,8 @@ class Transaction {
         total: (json['total'] as num).toDouble(),
       );
 
-  /// OrderModel'den dönüştür.
-  /// Backend: { id, symbol, side, amount, currentPnL, createdAt }
+  /// Converts a closed OrderModel into a Transaction for the history screen.
+  /// Backend: { id, symbol, side, amount, entryPrice, exitPrice, currentPnL, createdAt }
   factory Transaction.fromOrder(dynamic order) {
     final createdAt = (order.createdAt as String?) ?? '';
     String date = '';
@@ -48,13 +48,14 @@ class Transaction {
     }
     final side = (order.side as String).toUpperCase() == 'BUY' ? 'buy' : 'sell';
     final pnl = (order.currentPnL as double?) ?? 0.0;
+    final price = (order.entryPrice as double?) ?? 0.0;
     return Transaction(
       id:     order.id as String,
       date:   date,
       time:   time,
       side:   side,
       symbol: order.symbol as String,
-      price:  0.0,
+      price:  price,
       amount: (order.amount as double),
       total:  pnl.abs(),
     );

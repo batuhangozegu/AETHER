@@ -1,6 +1,10 @@
 // lib/screens/markets_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/market.dart';
+import '../providers/api_keys_provider.dart';
+import '../providers/app_providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
@@ -8,62 +12,88 @@ import '../widgets/coin_avatar.dart';
 import '../widgets/delta_pill.dart';
 import '../widgets/sparkline_chart.dart';
 
-class Market {
-  final String sym, name, vol;
-  final double price, change;
-  final List<double> spark;
-  final int rank;
-  const Market({required this.sym, required this.name, required this.price,
-    required this.change, required this.vol, required this.spark, required this.rank});
-  bool get isUp => change >= 0;
-}
+// ── Static coin metadata (name + rank) ──────────────────────────────────
+const _kCoinMeta = {
+  'BTC':  {'name': 'Bitcoin',   'rank': 1},
+  'ETH':  {'name': 'Ethereum',  'rank': 2},
+  'SOL':  {'name': 'Solana',    'rank': 5},
+  'AVAX': {'name': 'Avalanche', 'rank': 9},
+  'LINK': {'name': 'Chainlink', 'rank': 12},
+  'ADA':  {'name': 'Cardano',   'rank': 11},
+  'DOT':  {'name': 'Polkadot',  'rank': 14},
+  'MATIC':{'name': 'Polygon',   'rank': 17},
+};
 
-const _kMarkets = [
-  Market(sym:'BTC',  name:'Bitcoin',   price:67234.12, change:2.84,  vol:'38.2B', rank:1,  spark:[62,64,63,65,67,66,68,67,69,70,68,72]),
-  Market(sym:'ETH',  name:'Ethereum',  price:3127.80,  change:1.92,  vol:'14.8B', rank:2,  spark:[28,27,29,30,28,31,30,32,31,33,32,34]),
-  Market(sym:'SOL',  name:'Solana',    price:156.42,   change:4.21,  vol:'3.1B',  rank:5,  spark:[14,15,14,13,15,16,15,14,16,15,16,17]),
-  Market(sym:'AVAX', name:'Avalanche', price:32.18,    change:-1.84, vol:'420M',  rank:9,  spark:[38,37,36,35,36,34,35,33,34,33,32,31]),
-  Market(sym:'LINK', name:'Chainlink', price:16.34,    change:6.10,  vol:'388M',  rank:12, spark:[14,15,14,16,15,16,17,16,17,16,17,18]),
-  Market(sym:'ADA',  name:'Cardano',   price:0.42,     change:-0.92, vol:'210M',  rank:11, spark:[44,43,42,43,42,41,42,41,42,41,42,41]),
-  Market(sym:'DOT',  name:'Polkadot',  price:6.71,     change:3.10,  vol:'180M',  rank:14, spark:[62,63,62,64,65,64,66,65,67,66,68,69]),
-  Market(sym:'MATIC',name:'Polygon',   price:0.83,     change:2.10,  vol:'92M',   rank:17, spark:[78,80,79,81,82,80,82,83,82,84,83,85]),
-];
+// ── Provider ────────────────────────────────────────────────────────────
+final marketCoinsProvider = FutureProvider<List<CoinData>>((ref) async {
+  final apiService = ref.watch(apiServiceProvider);
+  final keys = ref.watch(apiKeysProvider).valueOrNull ?? [];
+  if (keys.isEmpty) return [];
+  try {
+    return await apiService.getMarketCoins(keys.first.id);
+  } catch (_) {
+    return [];
+  }
+});
 
-class MarketsScreen extends StatefulWidget {
+class MarketsScreen extends ConsumerStatefulWidget {
   const MarketsScreen({super.key});
   @override
-  State<MarketsScreen> createState() => _MarketsScreenState();
+  ConsumerState<MarketsScreen> createState() => _MarketsScreenState();
 }
 
-class _MarketsScreenState extends State<MarketsScreen> {
+class _MarketsScreenState extends ConsumerState<MarketsScreen> {
   String _filter = 'all';
   String _search = '';
   final _searchCtrl = TextEditingController();
 
-  List<Market> get _rows {
-    var list = _kMarkets.where((m) {
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<CoinData> _filtered(List<CoinData> coins) {
+    var list = coins.where((m) {
       if (_search.isNotEmpty) {
-        return m.sym.toLowerCase().contains(_search.toLowerCase()) ||
-               m.name.toLowerCase().contains(_search.toLowerCase());
+        return m.symbol.toLowerCase().contains(_search.toLowerCase());
       }
       return true;
     }).toList();
     if (_filter == 'gainers') list = list.where((m) => m.isUp).toList();
-    if (_filter == 'losers')  list = list.where((m) => !m.isUp).toList();
+    if (_filter == 'losers') list = list.where((m) => !m.isUp).toList();
     return list;
   }
 
   @override
   Widget build(BuildContext context) {
-    final rows = _rows;
+    final coinsAsync = ref.watch(marketCoinsProvider);
+
     return Scaffold(
       backgroundColor: AppColors.bg0,
       body: CustomScrollView(physics: const BouncingScrollPhysics(), slivers: [
         SliverToBoxAdapter(child: Padding(
           padding: const EdgeInsets.fromLTRB(22, 60, 22, 0),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Piyasalar', style: GoogleFonts.spaceGrotesk(
-              fontSize: 24, fontWeight: FontWeight.w600, letterSpacing: -0.5, color: AppColors.text1)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Piyasalar', style: GoogleFonts.spaceGrotesk(
+                  fontSize: 24, fontWeight: FontWeight.w600, letterSpacing: -0.5, color: AppColors.text1)),
+                GestureDetector(
+                  onTap: () => ref.invalidate(marketCoinsProvider),
+                  child: Container(
+                    width: 34, height: 34,
+                    decoration: BoxDecoration(
+                      color: AppColors.surface1,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.hairline, width: 0.5),
+                    ),
+                    child: const Icon(Icons.refresh_rounded, color: AppColors.text2, size: 16),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 14),
             // Search bar
             Container(
@@ -89,7 +119,7 @@ class _MarketsScreenState extends State<MarketsScreen> {
             // Filter chips
             SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
               for (final f in [
-                ('all', 'Hepsi'), ('gainers', 'Yükselen'), ('losers', 'Düşen'), ('watch', 'İzleme'),
+                ('all', 'Hepsi'), ('gainers', 'Yükselen'), ('losers', 'Düşen'),
               ]) ...[
                 GestureDetector(
                   onTap: () => setState(() => _filter = f.$1),
@@ -121,40 +151,82 @@ class _MarketsScreenState extends State<MarketsScreen> {
           ]),
         )),
         // List
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(22, 0, 22, 44),
-          sliver: SliverList(delegate: SliverChildBuilderDelegate((ctx, i) {
-            final m = rows[i];
-            return GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CoinDetailScreen(market: m))),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(
-                    color: i < rows.length - 1 ? AppColors.hairline : Colors.transparent, width: 0.5))),
-                child: Row(children: [
-                  // Rank
-                  SizedBox(width: 24, child: Text('${m.rank}', style: AppTheme.mono(
-                    fontSize: 10, color: AppColors.text4))),
-                  CoinAvatar(symbol: m.sym, size: 32),
-                  const SizedBox(width: 10),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(m.sym, style: GoogleFonts.spaceGrotesk(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.text1)),
-                    Text(m.name, style: GoogleFonts.spaceGrotesk(fontSize: 10.5, color: AppColors.text3)),
+        coinsAsync.when(
+          loading: () => const SliverToBoxAdapter(
+            child: Center(child: Padding(
+              padding: EdgeInsets.all(40),
+              child: CircularProgressIndicator(color: AppColors.accent),
+            )),
+          ),
+          error: (_, __) => SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Center(child: Text(
+                'Piyasa verisi yüklenemedi.\nExchange API anahtarı ekleyin.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.spaceGrotesk(fontSize: 13, color: AppColors.text3),
+              )),
+            ),
+          ),
+          data: (coins) {
+            if (coins.isEmpty) {
+              return SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.bar_chart_rounded, color: AppColors.text3, size: 40),
+                    const SizedBox(height: 10),
+                    Text('Piyasa verisi yok', style: GoogleFonts.spaceGrotesk(
+                      fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text2)),
+                    const SizedBox(height: 4),
+                    Text('Exchange API anahtarı ekleyerek başlayın.',
+                      style: GoogleFonts.spaceGrotesk(fontSize: 12, color: AppColors.text3)),
                   ])),
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text('\$${m.price < 10 ? m.price.toStringAsFixed(3) : Formatters.price(m.price)}',
-                      style: AppTheme.mono(fontSize: 13, fontWeight: FontWeight.w500)),
-                    const SizedBox(height: 2),
-                    DeltaPill(value: m.change),
-                  ]),
-                  const SizedBox(width: 10),
-                  SparklineChart(points: m.spark.map((e) => e.toDouble()).toList(),
-                    color: m.isUp ? AppColors.profit : AppColors.loss, width: 48, height: 22),
-                ]),
-              ),
+                ),
+              );
+            }
+            final rows = _filtered(coins);
+            return SliverPadding(
+              padding: const EdgeInsets.fromLTRB(22, 0, 22, 44),
+              sliver: SliverList(delegate: SliverChildBuilderDelegate((ctx, i) {
+                final m = rows[i];
+                final meta = _kCoinMeta[m.symbol];
+                final name = meta?['name'] as String? ?? m.symbol;
+                final rank = meta?['rank'] as int? ?? 0;
+                return GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => CoinDetailScreen(coin: m, name: name, rank: rank))),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(
+                        color: i < rows.length - 1 ? AppColors.hairline : Colors.transparent, width: 0.5))),
+                    child: Row(children: [
+                      SizedBox(width: 24, child: Text(rank > 0 ? '$rank' : '-',
+                        style: AppTheme.mono(fontSize: 10, color: AppColors.text4))),
+                      CoinAvatar(symbol: m.symbol, size: 32),
+                      const SizedBox(width: 10),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(m.symbol, style: GoogleFonts.spaceGrotesk(
+                          fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.text1)),
+                        Text(name, style: GoogleFonts.spaceGrotesk(fontSize: 10.5, color: AppColors.text3)),
+                      ])),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text('\$${m.price < 10 ? m.price.toStringAsFixed(3) : Formatters.price(m.price)}',
+                          style: AppTheme.mono(fontSize: 13, fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 2),
+                        DeltaPill(value: m.priceChangePercent),
+                      ]),
+                      const SizedBox(width: 10),
+                      SparklineChart(
+                        points: [m.price * 0.97, m.price * 0.98, m.price * 0.99, m.price],
+                        color: m.isUp ? AppColors.profit : AppColors.loss, width: 48, height: 22),
+                    ]),
+                  ),
+                );
+              }, childCount: rows.length)),
             );
-          }, childCount: rows.length)),
+          },
         ),
       ]),
     );
@@ -162,20 +234,25 @@ class _MarketsScreenState extends State<MarketsScreen> {
 }
 
 // ── Coin Detail ─────────────────────────────────────────────────────────
-class CoinDetailScreen extends StatefulWidget {
-  final Market market;
-  const CoinDetailScreen({super.key, required this.market});
+class CoinDetailScreen extends ConsumerStatefulWidget {
+  final CoinData coin;
+  final String name;
+  final int rank;
+  const CoinDetailScreen({super.key, required this.coin, required this.name, required this.rank});
   @override
-  State<CoinDetailScreen> createState() => _CoinDetailState();
+  ConsumerState<CoinDetailScreen> createState() => _CoinDetailState();
 }
 
-class _CoinDetailState extends State<CoinDetailScreen> {
+class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
   int _rangeIdx = 1;
-  final _ranges = ['1S', '24S', '1H', '1A', '1Y', 'Max'];
+  final _ranges = ['1m', '5m', '15m', '1h', '4h', '1d'];
+  final _rangeLabels = ['1D', '5D', '15D', '1S', '4S', '1G'];
 
   @override
   Widget build(BuildContext context) {
-    final m = widget.market;
+    final m = widget.coin;
+    final keys = ref.watch(apiKeysProvider).valueOrNull ?? [];
+
     return Scaffold(
       backgroundColor: AppColors.bg0,
       body: CustomScrollView(physics: const BouncingScrollPhysics(), slivers: [
@@ -184,7 +261,8 @@ class _CoinDetailState extends State<CoinDetailScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             // Top nav
             Row(children: [
-              GestureDetector(onTap: () => Navigator.pop(context), child: const Icon(Icons.arrow_back_ios_new, color: AppColors.text2, size: 18)),
+              GestureDetector(onTap: () => Navigator.pop(context),
+                child: const Icon(Icons.arrow_back_ios_new, color: AppColors.text2, size: 18)),
               const SizedBox(width: 8),
               Text('Piyasalar', style: GoogleFonts.spaceGrotesk(fontSize: 12, color: AppColors.text3)),
               const Spacer(),
@@ -195,38 +273,44 @@ class _CoinDetailState extends State<CoinDetailScreen> {
             const SizedBox(height: 18),
             // Header
             Row(children: [
-              CoinAvatar(symbol: m.sym, size: 46),
+              CoinAvatar(symbol: m.symbol, size: 46),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Text(m.name, style: GoogleFonts.spaceGrotesk(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.text1)),
+                  Text(widget.name, style: GoogleFonts.spaceGrotesk(
+                    fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.text1)),
                   const SizedBox(width: 8),
-                  Text('${m.sym} · #${m.rank}', style: AppTheme.mono(fontSize: 11, color: AppColors.text3)),
+                  Text('${m.symbol}${widget.rank > 0 ? ' · #${widget.rank}' : ''}',
+                    style: AppTheme.mono(fontSize: 11, color: AppColors.text3)),
                 ]),
                 const SizedBox(height: 4),
                 Row(children: [
-                  Text('\$${Formatters.price(m.price)}', style: AppTheme.mono(fontSize: 26, fontWeight: FontWeight.w500, letterSpacing: -0.5)),
+                  Text('\$${Formatters.price(m.price)}',
+                    style: AppTheme.mono(fontSize: 26, fontWeight: FontWeight.w500, letterSpacing: -0.5)),
                   const SizedBox(width: 8),
-                  DeltaPill(value: m.change),
+                  DeltaPill(value: m.priceChangePercent),
                 ]),
               ])),
             ]),
             const SizedBox(height: 14),
-            // Chart
+            // Mini price chart (static sparkline while candle data loads)
             Container(height: 140, child: CustomPaint(
               size: const Size(double.infinity, 140),
-              painter: _AreaChartPainter(points: m.spark.map((e) => e.toDouble()).toList(), color: AppColors.accent),
+              painter: _AreaChartPainter(
+                points: [m.price * 0.94, m.price * 0.96, m.price * 0.95, m.price * 0.97,
+                         m.price * 0.98, m.price * 0.97, m.price * 0.99, m.price],
+                color: AppColors.accent),
             )),
             const SizedBox(height: 12),
             // Time range
-            Row(children: List.generate(_ranges.length, (i) => Expanded(child: GestureDetector(
+            Row(children: List.generate(_rangeLabels.length, (i) => Expanded(child: GestureDetector(
               onTap: () => setState(() => _rangeIdx = i),
               child: AnimatedContainer(duration: const Duration(milliseconds: 120),
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
                   color: _rangeIdx == i ? AppColors.accentSoft : Colors.transparent,
                   borderRadius: BorderRadius.circular(7)),
-                child: Text(_ranges[i], textAlign: TextAlign.center,
+                child: Text(_rangeLabels[i], textAlign: TextAlign.center,
                   style: AppTheme.mono(fontSize: 11, fontWeight: FontWeight.w600,
                     color: _rangeIdx == i ? AppColors.accent : AppColors.text3,
                     letterSpacing: 0.02))),
@@ -239,10 +323,8 @@ class _CoinDetailState extends State<CoinDetailScreen> {
             Container(decoration: BoxDecoration(color: const Color(0x07FFFFFF),
               border: Border.all(color: AppColors.hairline, width: 0.5),
               borderRadius: BorderRadius.circular(14)), child: Column(children: [
-              _StatRow(label: 'Piyasa Değeri', value: '\$1.32T', borderTop: false, borderLeft: false),
-              _StatRow(label: '24s Hacim', value: '\$${m.vol}', borderTop: false, borderLeft: true),
-              _StatRow(label: 'Dolaşımda', value: '19.6M BTC', borderTop: true, borderLeft: false),
-              _StatRow(label: 'ATH', value: '\$73,748', borderTop: true, borderLeft: true),
+              _StatRow(label: '24s Değişim', value: '${m.priceChangePercent >= 0 ? '+' : ''}${m.priceChangePercent.toStringAsFixed(2)}%', borderTop: false, borderLeft: false),
+              _StatRow(label: 'Güncel Fiyat', value: '\$${Formatters.price(m.price)}', borderTop: false, borderLeft: true),
             ])),
             const SizedBox(height: 22),
             // CTAs
@@ -343,7 +425,6 @@ class _AreaChartPainter extends CustomPainter {
       ..color = color..strokeWidth = 1.8..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
 
-    // Current price dot
     final last = pts.last;
     canvas.drawCircle(last, 7, Paint()..color = color.withValues(alpha: 0.18));
     canvas.drawCircle(last, 3.5, Paint()..color = color);

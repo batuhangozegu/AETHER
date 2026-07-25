@@ -8,8 +8,10 @@ class OrderModel {
   final String symbol;       // e.g. "BTCUSDT"
   final String side;         // "BUY" | "SELL"
   final double amount;
+  final double? entryPrice;  // entry price
+  final double? exitPrice;   // exit price (set when closed)
   final String status;       // "OPEN" | "CLOSED" | "CANCELED" | "TRIGGERED"
-  final double? currentPnL;  // nullable — backend live hesaplıyor
+  final double? currentPnL;  // nullable — backend live calculates
   final String? createdAt;
   final String? closedAt;
 
@@ -18,6 +20,8 @@ class OrderModel {
     required this.symbol,
     required this.side,
     required this.amount,
+    this.entryPrice,
+    this.exitPrice,
     required this.status,
     this.currentPnL,
     this.createdAt,
@@ -33,6 +37,8 @@ class OrderModel {
         symbol: (json['symbol'] as String?) ?? '',
         side: (json['side'] as String?) ?? 'BUY',
         amount: (json['amount'] as num?)?.toDouble() ?? 0,
+        entryPrice: (json['entryPrice'] as num?)?.toDouble(),
+        exitPrice: (json['exitPrice'] as num?)?.toDouble(),
         status: (json['status'] as String?) ?? 'OPEN',
         currentPnL: (json['currentPnL'] as num?)?.toDouble(),
         createdAt: (json['createdAt'] as String?),

@@ -9,6 +9,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/asset.dart';
 import '../models/exchange_key.dart';
+import '../models/market.dart';
 import '../models/order.dart';
 import '../models/order_request.dart';
 import '../models/risk_profile.dart';
@@ -207,7 +208,7 @@ class ApiService {
   }
 
   /// GET /api/v1/portfolio/breakdown?exchangeKeyId={id}
-  /// Döner: [ { symbol, amount, usdValue, allocationPct } ]
+  /// Returns: [ { symbol, amount, usdValue, allocationPct } ]
   Future<List<AssetAllocation>> getPortfolioBreakdown(String exchangeKeyId) async {
     final res = await _dio.get(
       '/api/v1/portfolio/breakdown',
@@ -219,16 +220,59 @@ class ApiService {
         .toList();
   }
 
-  // ── ORDERS (geçmiş için aktif emirler) ─────────────────────────────────
+  // ── MARKETS ────────────────────────────────────────────────────────────
 
-  /// GET /api/v1/trades/active → active orders'ı Transaction olarak döndürür
-  /// (Backend'de kapalı emir listesi endpointi henüz yok)
+  /// GET /api/v1/markets/coins?exchangeKeyId={id}
+  /// Returns live coin prices for supported symbols
+  Future<List<CoinData>> getMarketCoins(String exchangeKeyId) async {
+    final res = await _dio.get(
+      '/api/v1/markets/coins',
+      queryParameters: {'exchangeKeyId': exchangeKeyId},
+    );
+    final list = res.data as List<dynamic>;
+    return list
+        .map((e) => CoinData.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// GET /api/v1/markets/coins/{symbol}/history?exchangeKeyId={id}&timeframe={tf}
+  /// Returns OHLCV candle data for chart display
+  Future<List<CandleData>> getCandleHistory(
+      String exchangeKeyId, String symbol, String timeframe) async {
+    final res = await _dio.get(
+      '/api/v1/markets/coins/$symbol/history',
+      queryParameters: {
+        'exchangeKeyId': exchangeKeyId,
+        'timeframe': timeframe,
+      },
+    );
+    final list = res.data as List<dynamic>;
+    return list
+        .map((e) => CandleData.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── TRADE HISTORY ──────────────────────────────────────────────────────
+
+  /// GET /api/v1/trades/history?page=&size=
+  /// Returns closed orders as Transaction list for the history screen
   Future<List<Transaction>> getTransactions({
     String side = 'all',
     int page = 0,
     int size = 20,
   }) async {
-    final orders = await getActiveOrders();
-    return orders.map((o) => Transaction.fromOrder(o)).toList();
+    final res = await _dio.get('/api/v1/trades/history', queryParameters: {
+      'page': page,
+      'size': size,
+    });
+    final list = res.data as List<dynamic>;
+    final orders = list
+        .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    final transactions = orders.map((o) => Transaction.fromOrder(o)).toList();
+
+    if (side == 'all') return transactions;
+    return transactions.where((t) => t.side == side).toList();
   }
 }

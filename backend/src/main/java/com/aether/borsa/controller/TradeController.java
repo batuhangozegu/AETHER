@@ -24,6 +24,15 @@ public class TradeController {
         return ResponseEntity.ok(tradeService.getActiveOrders(user));
     }
 
+    @GetMapping("/history")
+    public ResponseEntity<List<OrderResponse>> getOrderHistory(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        UUID user = getUserId(authentication);
+        return ResponseEntity.ok(tradeService.getOrderHistory(user, page, size));
+    }
+
     @PostMapping("/order")
     public ResponseEntity<OrderResponse> createOrder(Authentication authentication, @RequestBody @Valid CreateOrderRequest request) {
         UUID user = getUserId(authentication);
@@ -33,7 +42,7 @@ public class TradeController {
     @PostMapping("/{id}/close")
     public ResponseEntity<OrderResponse> closeOrder(Authentication authentication, @PathVariable UUID id) {
         UUID user = getUserId(authentication);
-        return ResponseEntity.ok(tradeService.closeOrder(user , id));
+        return ResponseEntity.ok(tradeService.closeOrder(user, id));
     }
 
     private UUID getUserId(Authentication authentication) {

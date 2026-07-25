@@ -16,7 +16,6 @@ import com.aether.borsa.service.RiskProfileService;
 import com.aether.borsa.service.exchange.ExchangeClientFactory;
 import com.aether.borsa.service.exchange.IExchangeClient;
 import lombok.RequiredArgsConstructor;
-import org.knowm.xchange.Exchange;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;

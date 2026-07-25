@@ -14,6 +14,7 @@ import com.aether.borsa.service.TradeService;
 import com.aether.borsa.service.exchange.ExchangeClientFactory;
 import com.aether.borsa.service.exchange.IExchangeClient;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -35,7 +36,7 @@ public class TradeServiceImpl implements TradeService {
     @Override
     public List<OrderResponse> getActiveOrders(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Kullanıcı Bulunamadı."));
+                .orElseThrow(() -> new RuntimeException("User not found."));
 
         List<Order> orders = orderRepository.findByUserAndStatus(user, OrderStatus.OPEN);
 
@@ -48,6 +49,19 @@ public class TradeServiceImpl implements TradeService {
 
         return orders.stream()
                 .map(order -> mapToResponse(order, priceMap.get(order.getSymbol())))
+                .toList();
+    }
+
+    @Override
+    public List<OrderResponse> getOrderHistory(UUID userId, int page, int size) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found."));
+
+        List<Order> closedOrders = orderRepository.findByUserAndStatusOrderByCreatedAtDesc(
+                user, OrderStatus.CLOSED, PageRequest.of(page, size));
+
+        return closedOrders.stream()
+                .map(order -> mapToResponse(order, order.getExitPrice() != null ? order.getExitPrice() : BigDecimal.ZERO))
                 .toList();
     }
 
@@ -75,7 +89,12 @@ public class TradeServiceImpl implements TradeService {
 
     @Override
     public OrderResponse closeOrder(UUID userId, UUID orderId) {
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new RuntimeException("Order bulunamadı"));
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found."));
+
+        if (!order.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Access denied: this order does not belong to you.");
+        }
 
         IExchangeClient client = exchangeClientFactory.getClient(order.getExchangeKey().getExchangeName());
         BigDecimal currentPrice = client.getCurrentPrice(order.getSymbol());
@@ -91,13 +110,16 @@ public class TradeServiceImpl implements TradeService {
 
 
     private OrderResponse mapToResponse(Order order, BigDecimal currentPrice) {
-        BigDecimal currentPnL = calculatePnL(order, currentPrice);
+        BigDecimal safeCurrentPrice = currentPrice != null ? currentPrice : BigDecimal.ZERO;
+        BigDecimal currentPnL = calculatePnL(order, safeCurrentPrice);
 
         return new OrderResponse(
                 order.getId(),
                 order.getSymbol(),
                 order.getSide(),
                 order.getAmount(),
+                order.getEntryPrice(),
+                order.getExitPrice(),
                 order.getStatus(),
                 currentPnL,
                 order.getCreatedAt(),

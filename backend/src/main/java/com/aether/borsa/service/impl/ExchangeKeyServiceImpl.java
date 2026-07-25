@@ -32,11 +32,14 @@ public class ExchangeKeyServiceImpl implements ExchangeKeyService {
         String encryptedApiKey = encryptionUtil.encrypt(request.getApiKey());
         String encryptedSecretKey = encryptionUtil.encrypt(request.getSecretKey());
 
+        String maskedApiKey = maskApiKey(request.getApiKey());
+
         ExchangeKey exchangeKey = ExchangeKey.builder()
                 .user(user)
                 .exchangeName(request.getExchangeName())
                 .encryptedApiKey(encryptedApiKey)
                 .encryptedSecretKey(encryptedSecretKey)
+                .maskedApiKey(maskedApiKey)
                 .canRead(request.isCanRead())
                 .canTrade(request.isCanTrade())
                 .build();
@@ -45,7 +48,7 @@ public class ExchangeKeyServiceImpl implements ExchangeKeyService {
         return new ExchangeKeyResponse(
                 exchangeKey.getId(),
                 exchangeKey.getExchangeName(),
-                maskApiKey(encryptedApiKey),
+                maskedApiKey,
                 exchangeKey.isCanRead(),
                 exchangeKey.isCanTrade(),
                 "ACTIVE"
@@ -62,10 +65,10 @@ public class ExchangeKeyServiceImpl implements ExchangeKeyService {
                 .map(key -> new ExchangeKeyResponse(
                         key.getId(),
                         key.getExchangeName(),
-                        maskApiKey(key.getEncryptedApiKey()),
+                        key.getMaskedApiKey(),
                         key.isCanRead(),
                         key.isCanTrade(),
-                        "ACTİVE"
+                        "ACTIVE"
                 )).toList();
     }
 

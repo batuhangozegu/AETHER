@@ -17,6 +17,8 @@ public class OrderResponse {
     private String symbol;
     private TradeSide side;
     private BigDecimal amount;
+    private BigDecimal entryPrice;
+    private BigDecimal exitPrice;
     private OrderStatus status;
     private BigDecimal currentPnL;
     private LocalDateTime createdAt;
