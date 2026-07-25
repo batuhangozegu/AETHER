@@ -1,6 +1,8 @@
-package com.aether.borsa.security;
+package com.aether.borsa.config;
 
 
+import com.aether.borsa.security.JwtTokenFilter;
+import com.aether.borsa.security.UserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -69,6 +71,7 @@ public class SecurityConfig {
             )
             .userDetailsService(userDetailsService)
             .addFilterBefore(jwtTokenFilter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
     }
 }
