@@ -90,6 +90,28 @@ public class BinanceExchangeClient implements IExchangeClient {
         }
     }
 
+    @Override
+    public TickerInfo getTickerInfo(String symbol) {
+        try {
+            ExchangeSpecification exSpec = new BinanceExchange().getDefaultExchangeSpecification();
+            exSpec.setExchangeSpecificParametersItem(BinanceExchange.EXCHANGE_TYPE, ExchangeType.SPOT);
+            exSpec.setExchangeSpecificParametersItem("Use_Sandbox", true);
+
+            Exchange exchange = ExchangeFactory.INSTANCE.createExchange(exSpec);
+
+            CurrencyPair pair = parseSymbol(symbol);
+            Ticker ticker = exchange.getMarketDataService().getTicker(pair);
+
+            BigDecimal price = ticker.getLast();
+            BigDecimal changePercent = ticker.getPercentageChange();
+
+            return new TickerInfo(price, changePercent);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Ticker bilgisi alınamadı: " + e.getMessage(), e);
+        }
+    }
+
     private CurrencyPair parseSymbol(String symbol) {
         if (symbol.endsWith("USDT")) {
             String base = symbol.substring(0, symbol.length() - 4);

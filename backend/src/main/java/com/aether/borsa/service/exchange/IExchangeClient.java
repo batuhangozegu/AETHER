@@ -8,4 +8,6 @@ public interface IExchangeClient {
     BigDecimal getBalance(String apiKey, String secretKey, String assest);
     BigDecimal getCurrentPrice(String symbol);
     Map<String, BigDecimal> getAllBalances(String apiKey, String secretKey);
+    TickerInfo getTickerInfo(String symbol);
+
 }
