@@ -23,7 +23,7 @@ public class AuthServiceImpl implements AuthService {
     public TokenResponse register(RegisterRequest request) {
         if(userRepository.existsByEmail(request.getEmail()) || userRepository.existsByUsername(request.getUsername()) )
         {
-            throw new RuntimeException("Bu email veya kullanıcı adı zaten kullanılıyor");
+            throw new RuntimeException("This email or username is already in use.");
         }
         User user = User.builder()
                 .username(request.getUsername())
@@ -40,10 +40,10 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public TokenResponse login(LoginRequest request) {
 
-        User  user = userRepository.findByEmail(request.getEmail()).orElseThrow(() -> new RuntimeException("Bu email ile hesap bulunamadı"));
+        User  user = userRepository.findByEmail(request.getEmail()).orElseThrow(() -> new RuntimeException("No account found with this email."));
         if(!passwordEncoder.matches(request.getPassword(), user.getPasswordHash()))
         {
-            throw new RuntimeException("Şifre hatalı");
+            throw new RuntimeException("Incorrect password.");
         }
         String token = jwtTokenProvider.generateToken(user.getId());
         return new TokenResponse(token, null, "Bearer", jwtTokenProvider.getExpiration());

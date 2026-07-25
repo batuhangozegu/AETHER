@@ -68,8 +68,8 @@ public class TradeServiceImpl implements TradeService {
     @Override
     public OrderResponse createOrder(UUID userId, CreateOrderRequest request) {
 
-        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("Kullanıcı Bulunamadı"));
-        ExchangeKey exchangeKey = exchangeKeyRepository.findById(request.getExchangeKeyId()).orElseThrow(() -> new RuntimeException("Borsa Bağlantısı Kurulamadı."));
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found."));
+        ExchangeKey exchangeKey = exchangeKeyRepository.findById(request.getExchangeKeyId()).orElseThrow(() -> new RuntimeException("Exchange key not found."));
         Order order = Order.builder()
                 .user(user)
                 .exchangeKey(exchangeKey)

@@ -38,7 +38,7 @@ public class PortfolioServiceImpl implements PortfolioService {
     @Override
     public PortfolioSummaryResponse getSummary(UUID userId, UUID exchangeKeyId) {
 
-        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı"));
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found."));
 
         BigDecimal totalBalance = exchangeService.getBalance(userId, exchangeKeyId, "USDT");
 
@@ -62,7 +62,7 @@ public class PortfolioServiceImpl implements PortfolioService {
         Map<String, BigDecimal> balances = exchangeService.getAllBalances(userId, exchangeKeyId);
 
         ExchangeKey exchangeKey = exchangeKeyRepository.findById(exchangeKeyId)
-                .orElseThrow(() -> new RuntimeException("Borsa bağlantısı bulunamadı."));
+                .orElseThrow(() -> new RuntimeException("Exchange key not found."));
 
         IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
 

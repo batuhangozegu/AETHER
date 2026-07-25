@@ -14,7 +14,7 @@ public class ExchangeClientFactory {
         if(exchangeName == ExchangeName.BINANCE){
             return binanceExchangeClient;
         }else {
-            throw new RuntimeException("Desteklenmeyen Borsa:" + exchangeName);
+            throw new RuntimeException("Unsupported exchange: " + exchangeName + ". Currently only BINANCE is supported.");
         }
     }
 

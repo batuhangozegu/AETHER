@@ -27,7 +27,7 @@ public class ExchangeKeyServiceImpl implements ExchangeKeyService {
     @Override
     public ExchangeKeyResponse addExchangeKey(UUID userId, AddExchangeKeyRequest request) throws Exception {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Kullanıcı Bulunamadı"));
+                .orElseThrow(() -> new RuntimeException("User not found."));
 
         String encryptedApiKey = encryptionUtil.encrypt(request.getApiKey());
         String encryptedSecretKey = encryptionUtil.encrypt(request.getSecretKey());
@@ -58,7 +58,7 @@ public class ExchangeKeyServiceImpl implements ExchangeKeyService {
     @Override
     public List<ExchangeKeyResponse> getExchangeKeys(UUID userId) {
 
-        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("Kullanıcı Bulunamadı"));
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found."));
         List<ExchangeKey> keyList = exchangeKeyRepository.findByUser(user);
 
         return keyList.stream()
@@ -75,10 +75,10 @@ public class ExchangeKeyServiceImpl implements ExchangeKeyService {
     @Override
     public void deleteExchangeKeys(UUID userId, UUID keyId) {
         ExchangeKey exchangeKey = exchangeKeyRepository.findById(keyId)
-                .orElseThrow(() -> new RuntimeException("Key Bulunamadı"));
+                .orElseThrow(() -> new RuntimeException("Exchange key not found."));
 
         if(!exchangeKey.getUser().getId().equals(userId)){
-            throw new RuntimeException("Bu Key Size Ait Değil");
+            throw new RuntimeException("Access denied: this exchange key does not belong to you.");
         }
         exchangeKeyRepository.delete(exchangeKey);
     }
