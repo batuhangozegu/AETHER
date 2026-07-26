@@ -37,6 +37,7 @@ class BorsaApp extends ConsumerWidget {
     final locale    = ref.watch(languageProvider);
     final authState = ref.watch(authStateProvider);
     return MaterialApp(
+      key: ValueKey(locale.languageCode), // force full rebuild on language change
       title: 'Borsa',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,

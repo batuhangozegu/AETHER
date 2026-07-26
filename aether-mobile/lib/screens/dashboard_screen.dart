@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/asset.dart'; // Portfolio sınıfı için
 import '../providers/app_providers.dart';
 import '../providers/api_keys_provider.dart';
+import '../providers/auth_user_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
@@ -128,6 +129,12 @@ class DashboardScreen extends ConsumerWidget {
     WidgetRef ref,
     AsyncValue<Portfolio> portfolioAsync,
   ) {
+    final authUser = ref.watch(authUserProvider).valueOrNull;
+    final username = authUser?.username ?? '';
+    final initials = username.trim().isEmpty
+        ? 'U'
+        : username.trim().split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase();
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 64, 22, 0),
       child: Column(
@@ -165,7 +172,7 @@ class DashboardScreen extends ConsumerWidget {
                     ]),
                   ),
                   const SizedBox(width: 8),
-                  // Profil avatarı — tıklanınca Profil tabına gider
+                  // Profil avatarı — gerçek isim kısaltması gösteriyor
                   GestureDetector(
                     onTap: () =>
                         ref.read(navIndexProvider.notifier).state = 4,
@@ -182,7 +189,7 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        'MK',
+                        initials,
                         style: GoogleFonts.spaceGrotesk(
                           color: Colors.white,
                           fontSize: 13,

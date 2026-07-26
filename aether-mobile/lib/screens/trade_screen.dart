@@ -16,13 +16,43 @@ import '../widgets/delta_pill.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/trade_dialogs.dart';
 
+// ── Available coins for trading ────────────────────────────────────────
+const _kTradeCoins = [
+  _TradeCoin('BTC', 'Bitcoin',  'BTCUSDT'),
+  _TradeCoin('ETH', 'Ethereum', 'ETHUSDT'),
+  _TradeCoin('SOL', 'Solana',   'SOLUSDT'),
+  _TradeCoin('BNB', 'BNB',      'BNBUSDT'),
+  _TradeCoin('ADA', 'Cardano',  'ADAUSDT'),
+];
+
+class _TradeCoin {
+  final String symbol, name, pair;
+  const _TradeCoin(this.symbol, this.name, this.pair);
+}
+
+// ── Order types ────────────────────────────────────────────────────────
+const _kOrderTypes = ['Limit', 'Market', 'Stop-Limit'];
+
 // ── Providers ──────────────────────────────────────────────────────────
 /// Fiyat geçmişi — Market Service (Faz 7) gelmeden önce sabit mock
 final priceHistoryProvider = FutureProvider<List<double>>((ref) async {
   return const [62, 63.5, 62.8, 64.2, 65.1, 64.5, 66.3, 65.8, 67.0, 66.4, 67.8, 68.2, 67.6, 68.9, 67.234];
 });
 
-// ── State ──────────────────────────────────────────────────────────────
+/// Fetches the real account balance from the backend via exchange key
+final accountBalanceProvider = FutureProvider<double>((ref) async {
+  final keys = ref.watch(apiKeysProvider).valueOrNull ?? [];
+  if (keys.isEmpty) return 0.0;
+  try {
+    final api = ref.watch(apiServiceProvider);
+    final portfolio = await api.getPortfolioSummary(keys.first.id);
+    return portfolio.balance;
+  } catch (_) {
+    return 0.0;
+  }
+});
+
+// ── State ──────────────────────────────────────────────────────
 enum TradeSide { buy, sell }
 
 class TradeFormState {
@@ -30,31 +60,52 @@ class TradeFormState {
   final double entryPrice;
   final double stopLoss;
   final String? selectedKeyId; // exchangeKeyId for backend
+  final double accountBalance; // fetched from real API
+  final String selectedCoinIdx; // index into _kTradeCoins
+  final String orderType;      // Limit / Market / Stop-Limit
 
   const TradeFormState({
     this.side = TradeSide.buy,
     this.entryPrice = 67234.12,
     this.stopLoss = 65800.00,
     this.selectedKeyId,
+    this.accountBalance = 0.0,
+    this.selectedCoinIdx = 'BTC',
+    this.orderType = 'Limit',
   });
 
-  double get accountBalance => 84273.52;
   double get riskPercent => 2.0;
   double get riskAmount => accountBalance * (riskPercent / 100);
   double get stopDistance => (entryPrice - stopLoss).abs();
   double get idealUnits => stopDistance > 0 ? riskAmount / stopDistance : 0;
   double get positionSize => idealUnits * entryPrice;
-  double get positionPercent => (positionSize / accountBalance) * 100;
+  double get positionPercent =>
+      accountBalance > 0 ? (positionSize / accountBalance) * 100 : 0;
   double get targetPrice => entryPrice + stopDistance * 2.5;
   double get stopPercent =>
       entryPrice > 0 ? ((entryPrice - stopLoss) / entryPrice) * 100 : 0;
 
-  TradeFormState copyWith({TradeSide? side, double? entryPrice, double? stopLoss, String? selectedKeyId}) =>
+  _TradeCoin get coin =>
+      _kTradeCoins.firstWhere((c) => c.symbol == selectedCoinIdx,
+          orElse: () => _kTradeCoins.first);
+
+  TradeFormState copyWith({
+    TradeSide? side,
+    double? entryPrice,
+    double? stopLoss,
+    String? selectedKeyId,
+    double? accountBalance,
+    String? selectedCoinIdx,
+    String? orderType,
+  }) =>
       TradeFormState(
         side: side ?? this.side,
         entryPrice: entryPrice ?? this.entryPrice,
         stopLoss: stopLoss ?? this.stopLoss,
         selectedKeyId: selectedKeyId ?? this.selectedKeyId,
+        accountBalance: accountBalance ?? this.accountBalance,
+        selectedCoinIdx: selectedCoinIdx ?? this.selectedCoinIdx,
+        orderType: orderType ?? this.orderType,
       );
 }
 
@@ -64,6 +115,9 @@ class TradeFormNotifier extends StateNotifier<TradeFormState> {
   void setEntry(double v) => state = state.copyWith(entryPrice: v);
   void setStop(double v) => state = state.copyWith(stopLoss: v);
   void setKeyId(String id) => state = state.copyWith(selectedKeyId: id);
+  void setBalance(double b) => state = state.copyWith(accountBalance: b);
+  void setCoin(String symbol) => state = state.copyWith(selectedCoinIdx: symbol);
+  void setOrderType(String t) => state = state.copyWith(orderType: t);
 }
 
 final tradeFormProvider = StateNotifierProvider<TradeFormNotifier, TradeFormState>(
@@ -81,6 +135,14 @@ class TradeScreen extends ConsumerWidget {
     final historyAsync = ref.watch(priceHistoryProvider);
     final keysAsync = ref.watch(apiKeysProvider);
     final activeOrdersAsync = ref.watch(tradeStateProvider);
+    final balanceAsync = ref.watch(accountBalanceProvider);
+
+    // Sync real balance into form state when it loads
+    ref.listen(accountBalanceProvider, (_, next) {
+      if (next is AsyncData<double> && next.value > 0) {
+        notifier.setBalance(next.value);
+      }
+    });
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
@@ -114,83 +176,42 @@ class TradeScreen extends ConsumerWidget {
                               style: GoogleFonts.spaceGrotesk(
                                   fontSize: 13, color: AppColors.text3)),
                           const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface2,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: AppColors.hairline, width: 0.5),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.tune,
-                                    size: 14, color: AppColors.text2),
-                                const SizedBox(width: 4),
-                                Text('Limit',
-                                    style: GoogleFonts.spaceGrotesk(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        color: AppColors.text2)),
-                              ],
+                          GestureDetector(
+                            onTap: () => _showOrderTypePicker(context, state, notifier),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface2,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: AppColors.hairline, width: 0.5),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.tune,
+                                      size: 14, color: AppColors.text2),
+                                  const SizedBox(width: 4),
+                                  Text(state.orderType,
+                                      style: GoogleFonts.spaceGrotesk(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.text2)),
+                                  const SizedBox(width: 2),
+                                  const Icon(Icons.keyboard_arrow_down,
+                                      size: 14, color: AppColors.text3),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 18),
 
-                      // Coin info
-                      Row(
-                        children: [
-                          const CoinAvatar(symbol: 'BTC', size: 42),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text('Bitcoin',
-                                        style: GoogleFonts.spaceGrotesk(
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: -0.1)),
-                                    const SizedBox(width: 8),
-                                    Text('BTC / USD',
-                                        style: AppTheme.mono(
-                                            fontSize: 12,
-                                            color: AppColors.text3)),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    RichText(
-                                      text: TextSpan(
-                                        children: [
-                                          TextSpan(
-                                              text: '\$67,234.',
-                                              style: AppTheme.mono(
-                                                  fontSize: 22,
-                                                  fontWeight: FontWeight.w500)),
-                                          TextSpan(
-                                              text: '12',
-                                              style: AppTheme.mono(
-                                                  fontSize: 22,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: AppColors.text3)),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const DeltaPill(value: 2.84),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                      // Coin selector
+                      _CoinSelector(
+                        selected: state.selectedCoinIdx,
+                        onSelected: notifier.setCoin,
                       ),
                       const SizedBox(height: 14),
 
@@ -534,9 +555,9 @@ class TradeScreen extends ConsumerWidget {
     }
     final payload = CreateOrderPayload(
       exchangeKeyId: state.selectedKeyId!,
-      symbol: 'BTCUSDT',
+      symbol: state.coin.pair,   // use selected coin, not hardcoded BTCUSDT
       side: state.side == TradeSide.buy ? 'BUY' : 'SELL',
-      type: 'LIMIT',
+      type: state.orderType.toUpperCase().replaceAll('-', '_'),
       amount: state.idealUnits,
       entryPrice: state.entryPrice,
       stopLoss: state.stopLoss,
@@ -561,6 +582,60 @@ class TradeScreen extends ConsumerWidget {
         );
       }
     }
+  }
+
+  void _showOrderTypePicker(
+      BuildContext context, TradeFormState state, TradeFormNotifier notifier) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF111828),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(22, 20, 22, 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Emir Tipi', style: GoogleFonts.spaceGrotesk(
+                fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.text1)),
+            const SizedBox(height: 4),
+            Text('Kullanmak istediğiniz emir tipini seçin',
+                style: GoogleFonts.spaceGrotesk(fontSize: 12, color: AppColors.text3)),
+            const SizedBox(height: 16),
+            ..._kOrderTypes.map((t) => GestureDetector(
+              onTap: () {
+                notifier.setOrderType(t);
+                Navigator.pop(context);
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                decoration: BoxDecoration(
+                  color: state.orderType == t
+                      ? AppColors.accentSoft
+                      : const Color(0x0AFFFFFF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: state.orderType == t
+                          ? AppColors.hairlineAccent
+                          : AppColors.hairline,
+                      width: 0.5),
+                ),
+                child: Row(children: [
+                  Text(t, style: GoogleFonts.spaceGrotesk(
+                      fontSize: 14, fontWeight: FontWeight.w500,
+                      color: state.orderType == t ? AppColors.accent : AppColors.text1)),
+                  const Spacer(),
+                  if (state.orderType == t)
+                    const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 18),
+                ]),
+              ),
+            )),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -923,5 +998,62 @@ class _OrderCard extends StatelessWidget {
         );
       }
     }
+  }
+}
+
+// ── Coin Selector ──────────────────────────────────────────────────────
+class _CoinSelector extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onSelected;
+  const _CoinSelector({required this.selected, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('İşlem Çifti',
+            style: GoogleFonts.spaceGrotesk(
+                fontSize: 11, color: AppColors.text3, letterSpacing: 0.04)),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: _kTradeCoins.map((coin) {
+              final isSelected = coin.symbol == selected;
+              return GestureDetector(
+                onTap: () => onSelected(coin.symbol),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.accentSoft : AppColors.surface1,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected ? AppColors.hairlineAccent : AppColors.hairline,
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Row(children: [
+                    CoinAvatar(symbol: coin.symbol, size: 22),
+                    const SizedBox(width: 7),
+                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(coin.symbol,
+                          style: GoogleFonts.spaceGrotesk(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected ? AppColors.accent : AppColors.text1)),
+                      Text(coin.pair,
+                          style: AppTheme.mono(fontSize: 9, color: AppColors.text3)),
+                    ]),
+                  ]),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
   }
 }

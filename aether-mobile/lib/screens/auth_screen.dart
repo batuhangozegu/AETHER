@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 import '../providers/app_providers.dart';
+import '../providers/auth_user_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'forgot_password_screen.dart';
@@ -55,6 +56,11 @@ class _LoginViewState extends State<_LoginView> {
     try {
       final apiService = ref.read(apiServiceProvider);
       await apiService.login(email, password);
+      // Save email as display name on login (username not available from login response)
+      await ref.read(authUserProvider.notifier).saveUser(
+        username: email.split('@').first,
+        email: email,
+      );
       ref.read(authStateProvider.notifier).setAuthState(AuthState.app);
     } catch (e) {
       String errMsg = 'Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.';
@@ -213,6 +219,11 @@ class _RegisterViewState extends State<_RegisterView> {
     try {
       final apiService = ref.read(apiServiceProvider);
       await apiService.register(username, email, pw1);
+      // Persist the real username and email for profile display
+      await ref.read(authUserProvider.notifier).saveUser(
+        username: username,
+        email: email,
+      );
       ref.read(authStateProvider.notifier).setAuthState(AuthState.app);
     } catch (e) {
       String errMsg = 'Kayıt olunamadı. Lütfen tekrar deneyin.';

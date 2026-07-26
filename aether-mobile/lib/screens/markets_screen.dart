@@ -11,6 +11,7 @@ import '../utils/formatters.dart';
 import '../widgets/coin_avatar.dart';
 import '../widgets/delta_pill.dart';
 import '../widgets/sparkline_chart.dart';
+import 'trade_screen.dart';
 
 // ── Static coin metadata (name + rank) ──────────────────────────────────
 const _kCoinMeta = {
@@ -327,11 +328,32 @@ class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
               _StatRow(label: 'Güncel Fiyat', value: '\$${Formatters.price(m.price)}', borderTop: false, borderLeft: true),
             ])),
             const SizedBox(height: 22),
-            // CTAs
+            // CTAs — navigate to Trade screen with coin pre-selected
             Row(children: [
-              Expanded(child: _TradeBtn(label: 'Al', color: AppColors.profit)),
+              Expanded(child: _TradeBtn(label: 'Al', color: AppColors.profit,
+                  symbol: m.symbol,
+                  onTap: () {
+                    // supported symbols in trade screen
+                    const supported = {'BTC', 'ETH', 'SOL', 'BNB', 'ADA'};
+                    if (supported.contains(m.symbol)) {
+                      ref.read(tradeFormProvider.notifier).setCoin(m.symbol);
+                    }
+                    ref.read(tradeFormProvider.notifier).setSide(TradeSide.buy);
+                    ref.read(navIndexProvider.notifier).state = 1;
+                    Navigator.pop(context);
+                  })),
               const SizedBox(width: 10),
-              Expanded(child: _TradeBtn(label: 'Sat', color: AppColors.loss)),
+              Expanded(child: _TradeBtn(label: 'Sat', color: AppColors.loss,
+                  symbol: m.symbol,
+                  onTap: () {
+                    const supported = {'BTC', 'ETH', 'SOL', 'BNB', 'ADA'};
+                    if (supported.contains(m.symbol)) {
+                      ref.read(tradeFormProvider.notifier).setCoin(m.symbol);
+                    }
+                    ref.read(tradeFormProvider.notifier).setSide(TradeSide.sell);
+                    ref.read(navIndexProvider.notifier).state = 1;
+                    Navigator.pop(context);
+                  })),
             ]),
             const SizedBox(height: 44),
           ]),
@@ -376,10 +398,12 @@ class _StatRow extends StatelessWidget {
 class _TradeBtn extends StatelessWidget {
   final String label;
   final Color color;
-  const _TradeBtn({required this.label, required this.color});
+  final String symbol;
+  final VoidCallback onTap;
+  const _TradeBtn({required this.label, required this.color, required this.symbol, required this.onTap});
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: () {},
+    onTap: onTap,
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(

@@ -2,21 +2,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/asset.dart'; // Portfolio class
 import '../providers/app_providers.dart';
 import '../providers/api_keys_provider.dart';
+import '../providers/auth_user_provider.dart';
 import '../models/order_request.dart'; // User sınıfı
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
 import '../widgets/delta_pill.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/profile_dialogs.dart';
 import '../widgets/settings_toggle_row.dart';
 import 'add_api_key_screen.dart';
+import 'dashboard_screen.dart';
 import 'two_factor_setup_screen.dart';
 
-// ── User provider ──────────────────────────────────────────────────────────
-/// Backend'de /me endpoint'i henüz yok.
-/// Kullanıcı adı/email düzenleme ile local override destekleniyor.
+// ── User provider is kept for backward compat but no longer used in build()
+// ignore: unused_element
 final userProvider = Provider<User>((_) => const User(
   id:           'local',
   name:         'Kullanıcı',
@@ -28,8 +31,8 @@ final userProvider = Provider<User>((_) => const User(
 ));
 
 // ── Local display name (editable until backend ready) ───────────────────
-final _localNameProvider  = StateProvider<String?>((_) => null);
-final _localEmailProvider = StateProvider<String?>((_) => null);
+final _localNameProvider  = StateProvider<String?>((ref) => null);
+final _localEmailProvider = StateProvider<String?>((ref) => null);
 
 // ── Prefs ───────────────────────────────────────────────────────────────
 class _Prefs {
@@ -52,7 +55,6 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user         = ref.watch(userProvider);
     final prefs        = ref.watch(prefsProvider);
     final prefsN       = ref.read(prefsProvider.notifier);
     final locale       = ref.watch(languageProvider);
@@ -61,6 +63,8 @@ class ProfileScreen extends ConsumerWidget {
     final localName    = ref.watch(_localNameProvider);
     final localEmail   = ref.watch(_localEmailProvider);
     final apiKeys      = apiKeysAsync.valueOrNull ?? [];
+    final authUser     = ref.watch(authUserProvider).valueOrNull;
+    final portfolioAsync = ref.watch(realPortfolioProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
@@ -80,8 +84,8 @@ class ProfileScreen extends ConsumerWidget {
                   onTap: () async {
                     final result = await showProfileEditSheet(
                       context,
-                      name: localName ?? user.name,
-                      email: localEmail ?? user.email,
+                      name: localName ?? (authUser?.username ?? ''),
+                      email: localEmail ?? (authUser?.email ?? ''),
                     );
                     if (result != null) {
                       ref.read(_localNameProvider.notifier).state  = result['name'];
@@ -103,16 +107,19 @@ class ProfileScreen extends ConsumerWidget {
 
             // ── Avatar + name ──────────────────────────────────────────
             Builder(builder: (_) {
-              final name  = localName  ?? user.name;
-              final email = localEmail ?? user.email;
+              // Priority: manually edited > saved auth user > empty fallback
+              final baseName  = authUser?.username ?? '';
+              final baseEmail = authUser?.email ?? '';
+              final name  = localName  ?? (baseName.isNotEmpty  ? baseName  : 'Kullanıcı');
+              final email = localEmail ?? (baseEmail.isNotEmpty ? baseEmail : '');
               final initials = name.trim().split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase();
-              return _ProfileHeader(initials: initials.isEmpty ? 'K' : initials, name: name, email: email, kycVerified: user.kycVerified);
+              return _ProfileHeader(initials: initials.isEmpty ? 'K' : initials, name: name, email: email, kycVerified: false);
             }),
 
             // ── Asset card ─────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
-              child: _AssetCard(balance: user.totalBalance, pnl: user.pnlPercent),
+              child: _AssetCard(portfolioAsync: portfolioAsync, apiKeys: apiKeys),
             ),
 
             // ── Güvenlik ───────────────────────────────────────────────
@@ -205,6 +212,8 @@ class ProfileScreen extends ConsumerWidget {
                   onPressed: () async {
                     final apiService = ref.read(apiServiceProvider);
                     await apiService.logout();
+                    // Also clear saved user data so next login shows fresh state
+                    await ref.read(authUserProvider.notifier).clearUser();
                     ref.read(authStateProvider.notifier).setAuthState(AuthState.auth);
                   },
                   icon: const Icon(Icons.logout, color: AppColors.loss, size: 17),
@@ -280,38 +289,63 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 class _AssetCard extends StatelessWidget {
-  final double balance, pnl;
-  const _AssetCard({required this.balance, required this.pnl});
+  final AsyncValue<Portfolio> portfolioAsync;
+  final List<ApiKey> apiKeys;
+  const _AssetCard({required this.portfolioAsync, required this.apiKeys});
+
   @override
-  Widget build(BuildContext context) => GlassCard(child: Column(children: [
-    Padding(padding: const EdgeInsets.fromLTRB(16,14,16,14), child: Row(children: [
-      Container(width: 40, height: 40, decoration: BoxDecoration(color: AppColors.accentSoft, borderRadius: BorderRadius.circular(11)),
-          child: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.accent, size: 20)),
-      const SizedBox(width: 14),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('TOPLAM VARLIK', style: GoogleFonts.spaceGrotesk(fontSize: 10, color: AppColors.text3, letterSpacing: 0.06)),
-        const SizedBox(height: 2),
-        RichText(text: TextSpan(children: [
-          TextSpan(text: '\$84,273', style: AppTheme.mono(fontSize: 17, fontWeight: FontWeight.w500)),
-          TextSpan(text: '.52', style: AppTheme.mono(fontSize: 17, fontWeight: FontWeight.w500, color: AppColors.text3)),
+  Widget build(BuildContext context) {
+    final firstKey = apiKeys.isNotEmpty ? apiKeys.first : null;
+    final exchangeName = firstKey?.exchange ?? 'Bağlı Borsa Yok';
+    final isConnected = firstKey != null;
+
+    return GlassCard(child: Column(children: [
+      Padding(padding: const EdgeInsets.fromLTRB(16,14,16,14), child: Row(children: [
+        Container(width: 40, height: 40, decoration: BoxDecoration(color: AppColors.accentSoft, borderRadius: BorderRadius.circular(11)),
+            child: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.accent, size: 20)),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('TOPLAM VARLIK', style: GoogleFonts.spaceGrotesk(fontSize: 10, color: AppColors.text3, letterSpacing: 0.06)),
+          const SizedBox(height: 2),
+          portfolioAsync.when(
+            data: (p) => RichText(text: TextSpan(children: [
+              TextSpan(text: '\$${p.balance.toStringAsFixed(2).split('.')[0]}',
+                  style: AppTheme.mono(fontSize: 17, fontWeight: FontWeight.w500)),
+              TextSpan(text: '.${p.balance.toStringAsFixed(2).split('.')[1]}',
+                  style: AppTheme.mono(fontSize: 17, fontWeight: FontWeight.w500, color: AppColors.text3)),
+            ])),
+            loading: () => Text('Yükleniyor...', style: AppTheme.mono(fontSize: 14, color: AppColors.text3)),
+            error: (_, __) => Text('\$0.00', style: AppTheme.mono(fontSize: 17, fontWeight: FontWeight.w500)),
+          ),
         ])),
+        portfolioAsync.when(
+          data: (p) => DeltaPill(value: p.pnl24hPercent),
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
       ])),
-      DeltaPill(value: pnl),
-    ])),
-    const Divider(color: AppColors.hairline, height: 0.5, thickness: 0.5),
-    Padding(padding: const EdgeInsets.fromLTRB(16,12,16,12), child: Row(children: [
-      Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.profit, shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: AppColors.profit, blurRadius: 8)])),
-      const SizedBox(width: 10),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Bağlı borsa', style: GoogleFonts.spaceGrotesk(fontSize: 11, color: AppColors.text3)),
-        Text('Binance Sim API', style: AppTheme.mono(fontSize: 12, fontWeight: FontWeight.w500)),
+      const Divider(color: AppColors.hairline, height: 0.5, thickness: 0.5),
+      Padding(padding: const EdgeInsets.fromLTRB(16,12,16,12), child: Row(children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(
+            color: isConnected ? AppColors.profit : AppColors.text3,
+            shape: BoxShape.circle,
+            boxShadow: isConnected ? [const BoxShadow(color: AppColors.profit, blurRadius: 8)] : null)),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Bağlı borsa', style: GoogleFonts.spaceGrotesk(fontSize: 11, color: AppColors.text3)),
+          Text(exchangeName, style: AppTheme.mono(fontSize: 12, fontWeight: FontWeight.w500)),
+        ])),
+        Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+                color: isConnected ? AppColors.profitSoft : AppColors.surface2,
+                borderRadius: BorderRadius.circular(6)),
+            child: Text(
+                isConnected ? 'CANLI' : 'PASIF',
+                style: AppTheme.mono(fontSize: 10, fontWeight: FontWeight.w600,
+                    color: isConnected ? AppColors.profit : AppColors.text3))),
       ])),
-      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(color: AppColors.profitSoft, borderRadius: BorderRadius.circular(6)),
-          child: Text('CANLI', style: AppTheme.mono(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.profit))),
-    ])),
-  ]));
+    ]));
+  }
 }
 
 class _ApiKeyRow extends StatelessWidget {
