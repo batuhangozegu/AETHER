@@ -10,9 +10,15 @@ import '../utils/formatters.dart';
 import '../widgets/coin_avatar.dart';
 
 // ── Provider ───────────────────────────────────────────────────────────
-/// GET /api/v1/trades/active → aktif emirleri Transaction olarak döndürür
-final transactionsProvider = FutureProvider((ref) {
-  return ref.watch(apiServiceProvider).getTransactions();
+/// GET /api/v1/trades/active → tüm emirleri çeker, Transaction'a dönüştürür.
+/// /api/v1/trades/history backendde henüz yok, active endpoint kullanılıyor.
+final transactionsProvider = FutureProvider<List<Transaction>>((ref) async {
+  try {
+    final orders = await ref.watch(apiServiceProvider).getActiveOrders();
+    return orders.map(Transaction.fromOrder).toList();
+  } catch (_) {
+    return [];
+  }
 });
 
 final historyFilterProvider = StateProvider<String>((_) => 'all');
@@ -127,9 +133,37 @@ class HistoryScreen extends ConsumerWidget {
               ),
             ),
             error: (e, _) => SliverToBoxAdapter(
-              child: Center(
-                child: Text('Hata: $e',
-                    style: const TextStyle(color: AppColors.loss)),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 40, 22, 0),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.history_toggle_off_rounded,
+                      color: AppColors.text3, size: 48),
+                  const SizedBox(height: 12),
+                  Text('Geçmiş yüklenemedi',
+                      style: GoogleFonts.spaceGrotesk(
+                          fontSize: 15, fontWeight: FontWeight.w600,
+                          color: AppColors.text2)),
+                  const SizedBox(height: 6),
+                  Text('Sunucu bağlantısını kontrol edin ve tekrar deneyin.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.spaceGrotesk(
+                          fontSize: 12, color: AppColors.text3)),
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () => ref.invalidate(transactionsProvider),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                          color: AppColors.accentSoft,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.hairlineAccent, width: 0.5)),
+                      child: Text('Tekrar Dene',
+                          style: GoogleFonts.spaceGrotesk(
+                              fontSize: 13, fontWeight: FontWeight.w600,
+                              color: AppColors.accent)),
+                    ),
+                  ),
+                ]),
               ),
             ),
           ),

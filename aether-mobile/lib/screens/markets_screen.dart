@@ -13,6 +13,26 @@ import '../widgets/delta_pill.dart';
 import '../widgets/sparkline_chart.dart';
 import 'trade_screen.dart';
 
+/// Coin sembolünden deterministik ama görsel olarak farklı sparkline üretir.
+List<double> _sparklineFor(String symbol, double price, bool isUp) {
+  // symbol karakterlerinin ASCII toplamını seed olarak kullan
+  final seed = symbol.codeUnits.fold(0, (a, b) => a + b);
+  // 7 adımlık faktör serisi — her coin için benzersiz bir desen
+  final offsets = List.generate(7, (i) {
+    final v = ((seed * (i + 3)) % 17) / 100.0; // 0..0.17 aralığı
+    return (i % 2 == 0) ? -v : v;
+  });
+  // Son değeri gerçek fiyat yap, diğerlerini ona göre hesapla
+  final result = <double>[];
+  double cur = price * (isUp ? 0.94 : 1.06);
+  for (final off in offsets) {
+    cur = cur + price * off;
+    result.add(cur);
+  }
+  result.add(price); // son nokta her zaman gerçek fiyat
+  return result;
+}
+
 // ── Static coin metadata (name + rank) ──────────────────────────────────
 const _kCoinMeta = {
   'BTC':  {'name': 'Bitcoin',   'rank': 1},
@@ -220,8 +240,9 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
                       ]),
                       const SizedBox(width: 10),
                       SparklineChart(
-                        points: [m.price * 0.97, m.price * 0.98, m.price * 0.99, m.price],
-                        color: m.isUp ? AppColors.profit : AppColors.loss, width: 48, height: 22),
+                        points: _sparklineFor(m.symbol, m.price, m.isUp),
+                        color: m.isUp ? AppColors.profit : AppColors.loss,
+                        width: 48, height: 22),
                     ]),
                   ),
                 );

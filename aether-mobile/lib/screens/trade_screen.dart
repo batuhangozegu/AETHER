@@ -33,10 +33,32 @@ class _TradeCoin {
 // ── Order types ────────────────────────────────────────────────────────
 const _kOrderTypes = ['Limit', 'Market', 'Stop-Limit'];
 
+// ── Per-coin mock price data (Faz 7 gelmeden önce sabit őrnek) ─────
+/// Her coin için farklı bir yaklaşık fiyat seti kullanılıyor.
+/// Format: kısa price history (normalised = price x factor)
+const _kCoinBasePrices = {
+  'BTC': 67234.12,
+  'ETH': 3821.55,
+  'SOL': 178.44,
+  'BNB': 418.70,
+  'ADA': 0.651,
+};
+
+/// Coin'e özgü fiyat geçmişi mölcü verileri.
+/// Her sembolün kendi iner/çıkar şekli var.
+const _kCoinHistory = {
+  'BTC': [65100.0, 64800.0, 66200.0, 65700.0, 67100.0, 66500.0, 67800.0, 67234.12],
+  'ETH': [3600.0, 3650.0, 3720.0, 3680.0, 3750.0, 3800.0, 3810.0, 3821.55],
+  'SOL': [172.0, 168.5, 174.3, 176.0, 171.0, 179.2, 177.0, 178.44],
+  'BNB': [400.0, 405.5, 410.0, 415.2, 412.0, 416.8, 419.0, 418.70],
+  'ADA': [0.601, 0.620, 0.615, 0.635, 0.628, 0.644, 0.650, 0.651],
+};
+
 // ── Providers ──────────────────────────────────────────────────────────
-/// Fiyat geçmişi — Market Service (Faz 7) gelmeden önce sabit mock
-final priceHistoryProvider = FutureProvider<List<double>>((ref) async {
-  return const [62, 63.5, 62.8, 64.2, 65.1, 64.5, 66.3, 65.8, 67.0, 66.4, 67.8, 68.2, 67.6, 68.9, 67.234];
+/// Coin'e göre fiyat geçmişi döndüren family provider
+final priceHistoryProvider =
+    FutureProvider.family<List<double>, String>((ref, symbol) async {
+  return _kCoinHistory[symbol] ?? _kCoinHistory['BTC']!;
 });
 
 /// Fetches the real account balance from the backend via exchange key
@@ -116,8 +138,25 @@ class TradeFormNotifier extends StateNotifier<TradeFormState> {
   void setStop(double v) => state = state.copyWith(stopLoss: v);
   void setKeyId(String id) => state = state.copyWith(selectedKeyId: id);
   void setBalance(double b) => state = state.copyWith(accountBalance: b);
-  void setCoin(String symbol) => state = state.copyWith(selectedCoinIdx: symbol);
   void setOrderType(String t) => state = state.copyWith(orderType: t);
+
+  /// Coin değişince hem symbol hem de giriş/stop-loss fiyatlarını sıfırla
+  void setCoin(String symbol) {
+    // Coin'e özgü varsayılan giriş + stop-loss değerleri
+    const defaults = {
+      'BTC': (67234.12, 65800.0),
+      'ETH': (3821.55,  3700.0),
+      'SOL': (178.44,   172.0),
+      'BNB': (418.70,   408.0),
+      'ADA': (0.651,    0.62),
+    };
+    final d = defaults[symbol];
+    state = state.copyWith(
+      selectedCoinIdx: symbol,
+      entryPrice: d?.$1 ?? state.entryPrice,
+      stopLoss:   d?.$2 ?? state.stopLoss,
+    );
+  }
 }
 
 final tradeFormProvider = StateNotifierProvider<TradeFormNotifier, TradeFormState>(
@@ -132,7 +171,7 @@ class TradeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(tradeFormProvider);
     final notifier = ref.read(tradeFormProvider.notifier);
-    final historyAsync = ref.watch(priceHistoryProvider);
+    final historyAsync = ref.watch(priceHistoryProvider(state.selectedCoinIdx));
     final keysAsync = ref.watch(apiKeysProvider);
     final activeOrdersAsync = ref.watch(tradeStateProvider);
     final balanceAsync = ref.watch(accountBalanceProvider);
@@ -214,6 +253,10 @@ class TradeScreen extends ConsumerWidget {
                         onSelected: notifier.setCoin,
                       ),
                       const SizedBox(height: 14),
+
+                      // Coin price header — updates when coin changes
+                      _CoinPriceHeader(coin: state.coin, entryPrice: state.entryPrice),
+                      const SizedBox(height: 12),
 
                       // Chart
                       _buildChart(historyAsync),
@@ -1055,5 +1098,55 @@ class _CoinSelector extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+// ── Coin Price Header ──────────────────────────────────────────────────
+/// Selected coin's name, price and 24h delta — updates on coin switch
+class _CoinPriceHeader extends StatelessWidget {
+  final _TradeCoin coin;
+  final double entryPrice;
+  const _CoinPriceHeader({required this.coin, required this.entryPrice});
+
+  @override
+  Widget build(BuildContext context) {
+    // 24h delta lookup (approx from history first vs last point)
+    const deltas = {'BTC': 2.84, 'ETH': 1.47, 'SOL': -0.63, 'BNB': 0.92, 'ADA': -1.15};
+    final delta = deltas[coin.symbol] ?? 0.0;
+    final isUp = delta >= 0;
+    final price = _kCoinBasePrices[coin.symbol] ?? entryPrice;
+
+    return Row(children: [
+      CoinAvatar(symbol: coin.symbol, size: 42),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(coin.name, style: GoogleFonts.spaceGrotesk(
+              fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.1)),
+          const SizedBox(width: 8),
+          Text(coin.pair, style: AppTheme.mono(fontSize: 11, color: AppColors.text3)),
+        ]),
+        const SizedBox(height: 4),
+        Row(children: [
+          RichText(text: TextSpan(children: [
+            TextSpan(
+              text: '\$${price.toStringAsFixed(price < 10 ? 3 : 0).replaceAllMapped(
+                RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},',
+              )}.',
+              style: AppTheme.mono(fontSize: 22, fontWeight: FontWeight.w500),
+            ),
+            TextSpan(
+              text: price < 10
+                  ? ''
+                  : price.toStringAsFixed(2).split('.')[1],
+              style: AppTheme.mono(fontSize: 22, fontWeight: FontWeight.w500,
+                  color: AppColors.text3),
+            ),
+          ])),
+          const SizedBox(width: 8),
+          DeltaPill(value: delta),
+        ]),
+      ])),
+    ]);
   }
 }
