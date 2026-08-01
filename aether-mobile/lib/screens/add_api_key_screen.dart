@@ -35,6 +35,7 @@ class _AddApiKeyState extends ConsumerState<AddApiKeyScreen> {
 
   final _apiKeyCtrl    = TextEditingController();
   final _secretKeyCtrl = TextEditingController();
+  final _passphraseCtrl = TextEditingController();
 
   bool _loading = false;
   bool? _testOk;  // null=idle, true=ok, false=error
@@ -43,16 +44,27 @@ class _AddApiKeyState extends ConsumerState<AddApiKeyScreen> {
   void dispose() {
     _apiKeyCtrl.dispose();
     _secretKeyCtrl.dispose();
+    _passphraseCtrl.dispose();
     super.dispose();
   }
+
+  bool get _needsPassphrase => _exchange == 'OKX';
 
   Future<void> _save() async {
     final apiKey    = _apiKeyCtrl.text.trim();
     final secretKey = _secretKeyCtrl.text.trim();
+    final passphrase = _passphraseCtrl.text.trim();
 
     if (apiKey.isEmpty || secretKey.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('API Key ve Secret Key boş olamaz')),
+      );
+      return;
+    }
+
+    if (_needsPassphrase && passphrase.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('OKX için Passphrase gerekli')),
       );
       return;
     }
@@ -64,6 +76,7 @@ class _AddApiKeyState extends ConsumerState<AddApiKeyScreen> {
         exchangeName: _exchangeEnums[_exchange]!,
         apiKey:       apiKey,
         secretKey:    secretKey,
+        passphrase:   _needsPassphrase ? passphrase : null,
         canRead:      _permRead,
         canTrade:     _permTrade,
       );
@@ -135,6 +148,11 @@ class _AddApiKeyState extends ConsumerState<AddApiKeyScreen> {
               const SizedBox(height: 12),
               _AuthField(label: 'Secret Key', hint: 'Gizli anahtarı yapıştır',
                   obscure: true, controller: _secretKeyCtrl),
+              if (_needsPassphrase) ...[
+                const SizedBox(height: 12),
+                _AuthField(label: 'Passphrase', hint: 'OKX API anahtarı oluştururken belirlediğin parola',
+                    obscure: true, controller: _passphraseCtrl),
+              ],
               const SizedBox(height: 20),
 
               // İzinler

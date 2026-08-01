@@ -34,6 +34,9 @@ public class ExchangeKey {
     @Column(name = "encrypted_secret_key")
     private String encryptedSecretKey;
 
+    @Column(name = "encrypted_passphrase")
+    private String encryptedPassphrase;
+
     @Column(name = "masked_api_key")
     private String maskedApiKey;
 

@@ -39,7 +39,7 @@ public class BinanceExchangeClient implements IExchangeClient {
     }
 
     @Override
-    public BigDecimal getBalance(String apiKey, String secretKey, String asset) {
+    public BigDecimal getBalance(String apiKey, String secretKey, String passphrase, String asset) {
         try {
             Exchange exchange = createExchange(apiKey, secretKey);
 
@@ -71,7 +71,7 @@ public class BinanceExchangeClient implements IExchangeClient {
     }
 
     @Override
-    public Map<String, BigDecimal> getAllBalances(String apiKey, String secretKey) {
+    public Map<String, BigDecimal> getAllBalances(String apiKey, String secretKey, String passphrase) {
         try {
             Exchange exchange = createExchange(apiKey, secretKey);
             AccountInfo accountInfo = exchange.getAccountService().getAccountInfo();

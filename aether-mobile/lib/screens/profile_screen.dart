@@ -200,8 +200,9 @@ class ProfileScreen extends ConsumerWidget {
                       key: ValueKey(k.id),
                       apiKey: k,
                       onEdit: () => showApiKeyDialog(context, existing: k,
-                          onSave: (apiKey, secretKey, canRead, canTrade) => apiKeysN.updateKey(
-                              k.id, apiKey: apiKey, secretKey: secretKey, canRead: canRead, canTrade: canTrade)),
+                          onSave: (apiKey, secretKey, passphrase, canRead, canTrade) => apiKeysN.updateKey(
+                              k.id, apiKey: apiKey, secretKey: secretKey, passphrase: passphrase,
+                              canRead: canRead, canTrade: canTrade)),
                       onDelete: () => apiKeysN.removeKey(k.id),
                     ),
                   ];

@@ -8,9 +8,9 @@ import java.util.Map;
 
 public interface IExchangeClient {
 
-    BigDecimal getBalance(String apiKey, String secretKey, String asset);
+    BigDecimal getBalance(String apiKey, String secretKey, String passphrase, String asset);
     BigDecimal getCurrentPrice(String symbol);
-    Map<String, BigDecimal> getAllBalances(String apiKey, String secretKey);
+    Map<String, BigDecimal> getAllBalances(String apiKey, String secretKey, String passphrase);
     TickerInfo getTickerInfo(String symbol);
     List<CandleResponse> getCandles(String symbol, String timeframe);
 }

@@ -17,6 +17,8 @@ public class AddExchangeKeyRequest {
     @NotBlank(message = "Secret Key boş olamaz.")
     private String secretKey;
 
+    private String passphrase;
+
     private boolean canRead;
 
     private boolean canTrade;

@@ -41,3 +41,7 @@ encryption:
 exchange:
   binance:
     use-sandbox: true
+  bybit:
+    use-testnet: true
+  okx:
+    use-sandbox: true

@@ -34,9 +34,12 @@ public class ExchangeServiceImpl implements ExchangeService {
 
             String apiKey = encryptionUtil.decrypt(exchangeKey.getEncryptedApiKey());
             String secretKey = encryptionUtil.decrypt(exchangeKey.getEncryptedSecretKey());
+            String passphrase = exchangeKey.getEncryptedPassphrase() != null
+                    ? encryptionUtil.decrypt(exchangeKey.getEncryptedPassphrase())
+                    : null;
 
             IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
-            return client.getBalance(apiKey, secretKey, asset);
+            return client.getBalance(apiKey, secretKey, passphrase, asset);
         } catch (Exception e){
             throw new RuntimeException("Şifre çözme işlemi başarısız:" + e.getMessage());
         }
@@ -55,11 +58,14 @@ public class ExchangeServiceImpl implements ExchangeService {
 
             String apiKey = encryptionUtil.decrypt(exchangeKey.getEncryptedApiKey());
             String secretKey = encryptionUtil.decrypt(exchangeKey.getEncryptedSecretKey());
+            String passphrase = exchangeKey.getEncryptedPassphrase() != null
+                    ? encryptionUtil.decrypt(exchangeKey.getEncryptedPassphrase())
+                    : null;
 
             IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
 
 
-            return client.getAllBalances(apiKey, secretKey);
+            return client.getAllBalances(apiKey, secretKey, passphrase);
 
         }catch (Exception e){
             throw new RuntimeException("Şifre çözme işlemi başarısız:" + e.getMessage());

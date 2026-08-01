@@ -159,6 +159,7 @@ class ApiService {
     required String exchangeName,
     required String apiKey,
     required String secretKey,
+    String? passphrase,
     bool canRead = true,
     bool canTrade = false,
   }) async {
@@ -166,6 +167,7 @@ class ApiService {
       'exchangeName': exchangeName,
       'apiKey': apiKey,
       'secretKey': secretKey,
+      if (passphrase != null && passphrase.isNotEmpty) 'passphrase': passphrase,
       'canRead': canRead,
       'canTrade': canTrade,
     });
@@ -343,12 +345,14 @@ class ApiService {
     String id, {
     required String apiKey,
     required String secretKey,
+    String? passphrase,
     bool canRead = true,
     bool canTrade = false,
   }) async {
     final res = await _dio.put('/api/v1/exchanges/$id', data: {
       'apiKey': apiKey,
       'secretKey': secretKey,
+      if (passphrase != null && passphrase.isNotEmpty) 'passphrase': passphrase,
       'canRead': canRead,
       'canTrade': canTrade,
     });

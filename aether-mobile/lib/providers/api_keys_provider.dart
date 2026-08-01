@@ -62,6 +62,7 @@ class ApiKeysNotifier extends AsyncNotifier<List<ApiKey>> {
     required String exchangeName, // enum string: "BINANCE" vs.
     required String apiKey,
     required String secretKey,
+    String? passphrase,
     bool canRead  = true,
     bool canTrade = false,
   }) async {
@@ -69,6 +70,7 @@ class ApiKeysNotifier extends AsyncNotifier<List<ApiKey>> {
       exchangeName: exchangeName,
       apiKey:       apiKey,
       secretKey:    secretKey,
+      passphrase:   passphrase,
       canRead:      canRead,
       canTrade:     canTrade,
     );
@@ -88,11 +90,13 @@ class ApiKeysNotifier extends AsyncNotifier<List<ApiKey>> {
   Future<void> updateKey(String id, {
     required String apiKey,
     required String secretKey,
+    String? passphrase,
     required bool canRead,
     required bool canTrade,
   }) async {
     final model = await _api.updateExchangeKey(id,
-        apiKey: apiKey, secretKey: secretKey, canRead: canRead, canTrade: canTrade);
+        apiKey: apiKey, secretKey: secretKey, passphrase: passphrase,
+        canRead: canRead, canTrade: canTrade);
     final current = state.valueOrNull ?? [];
     state = AsyncData(
       current.map((k) => k.id == id ? ApiKey.fromModel(model) : k).toList(),

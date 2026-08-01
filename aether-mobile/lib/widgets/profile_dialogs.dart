@@ -9,10 +9,12 @@ import '../providers/api_keys_provider.dart';
 Future<void> showApiKeyDialog(
   BuildContext context, {
   required ApiKey existing,
-  required Future<void> Function(String apiKey, String secretKey, bool canRead, bool canTrade) onSave,
+  required Future<void> Function(String apiKey, String secretKey, String? passphrase, bool canRead, bool canTrade) onSave,
 }) async {
   final keyCtrl = TextEditingController(text: '');
   final secretCtrl = TextEditingController(text: '');
+  final passphraseCtrl = TextEditingController(text: '');
+  final needsPassphrase = existing.exchange.toUpperCase() == 'OKX';
   bool canRead = existing.canRead;
   bool canTrade = existing.canTrade;
   bool saving = false;
@@ -31,6 +33,10 @@ Future<void> showApiKeyDialog(
         _Field(controller: keyCtrl, label: 'Yeni API Anahtarı', hint: 'sk-…', obscure: true),
         const SizedBox(height: 12),
         _Field(controller: secretCtrl, label: 'Yeni Secret Anahtarı', hint: '••••••••', obscure: true),
+        if (needsPassphrase) ...[
+          const SizedBox(height: 12),
+          _Field(controller: passphraseCtrl, label: 'Yeni Passphrase', hint: '••••••••', obscure: true),
+        ],
         const SizedBox(height: 12),
         Row(children: [
           Checkbox(value: canRead, onChanged: (v) => setState(() => canRead = v ?? canRead)),
@@ -48,9 +54,16 @@ Future<void> showApiKeyDialog(
         TextButton(
           onPressed: saving ? null : () async {
             if (keyCtrl.text.trim().isEmpty || secretCtrl.text.trim().isEmpty) return;
+            if (needsPassphrase && passphraseCtrl.text.trim().isEmpty) return;
             setState(() => saving = true);
             try {
-              await onSave(keyCtrl.text.trim(), secretCtrl.text.trim(), canRead, canTrade);
+              await onSave(
+                keyCtrl.text.trim(),
+                secretCtrl.text.trim(),
+                needsPassphrase ? passphraseCtrl.text.trim() : null,
+                canRead,
+                canTrade,
+              );
               if (ctx.mounted) Navigator.pop(ctx);
             } catch (_) {
               setState(() => saving = false);
