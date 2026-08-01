@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -34,7 +36,8 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
        String token = jwtTokenProvider.generateToken(user.getId());
-       return new TokenResponse(token,null, "Bearer" , jwtTokenProvider.getExpiration());
+       String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+       return new TokenResponse(token, refreshToken, "Bearer" , jwtTokenProvider.getExpiration());
     }
 
     @Override
@@ -46,6 +49,21 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("Incorrect password.");
         }
         String token = jwtTokenProvider.generateToken(user.getId());
-        return new TokenResponse(token, null, "Bearer", jwtTokenProvider.getExpiration());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+        return new TokenResponse(token, refreshToken, "Bearer", jwtTokenProvider.getExpiration());
+    }
+
+    @Override
+    public TokenResponse refresh(String refreshToken) {
+        if (!jwtTokenProvider.validateToken(refreshToken) || !jwtTokenProvider.isRefreshToken(refreshToken)) {
+            throw new RuntimeException("Invalid or expired refresh token.");
+        }
+
+        UUID userId = UUID.fromString(jwtTokenProvider.getUserIdFromJWT(refreshToken));
+        userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found."));
+
+        String newToken = jwtTokenProvider.generateToken(userId);
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
+        return new TokenResponse(newToken, newRefreshToken, "Bearer", jwtTokenProvider.getExpiration());
     }
 }

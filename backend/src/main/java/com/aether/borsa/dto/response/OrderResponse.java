@@ -19,6 +19,8 @@ public class OrderResponse {
     private BigDecimal amount;
     private BigDecimal entryPrice;
     private BigDecimal exitPrice;
+    private BigDecimal takeProfit;
+    private BigDecimal stopLoss;
     private OrderStatus status;
     private BigDecimal currentPnL;
     private LocalDateTime createdAt;

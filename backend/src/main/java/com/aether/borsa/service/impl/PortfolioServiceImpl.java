@@ -5,6 +5,7 @@ import com.aether.borsa.dto.response.PortfolioSummaryResponse;
 import com.aether.borsa.model.entity.ExchangeKey;
 import com.aether.borsa.model.entity.Order;
 import com.aether.borsa.model.entity.User;
+import com.aether.borsa.model.enums.OrderStatus;
 import com.aether.borsa.model.enums.TradeSide;
 import com.aether.borsa.repository.ExchangeKeyRepository;
 import com.aether.borsa.repository.OrderRepository;
@@ -43,7 +44,8 @@ public class PortfolioServiceImpl implements PortfolioService {
         BigDecimal totalBalance = exchangeService.getBalance(userId, exchangeKeyId, "USDT");
 
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        List<Order> closedToday = orderRepository.findByUserAndClosedAtAfter(user, startOfDay);
+        List<Order> closedToday = orderRepository.findByUserAndStatusAndClosedAtAfter(
+                user, OrderStatus.CLOSED, startOfDay);
 
         BigDecimal dailyPnl = closedToday.stream().map(this::calculatePnL).reduce(BigDecimal.ZERO, BigDecimal::add);
 

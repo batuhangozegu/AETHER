@@ -23,9 +23,9 @@ public class MarketServiceImpl implements MarketService {
     private final ExchangeClientFactory exchangeClientFactory;
 
     @Override
-    public List<CoinResponse> getCoins(UUID exchangeKeyId) {
+    public List<CoinResponse> getCoins(UUID userId, UUID exchangeKeyId) {
 
-        ExchangeKey exchangeKey = exchangeKeyRepository.findById(exchangeKeyId).orElseThrow(() -> new RuntimeException("Borsa bağlantısı bulunamadı."));
+        ExchangeKey exchangeKey = getOwnedExchangeKey(userId, exchangeKeyId);
 
         IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
         return SupportedCoins.SYMBOLS.stream()
@@ -36,12 +36,22 @@ public class MarketServiceImpl implements MarketService {
     }
 
     @Override
-    public List<CandleResponse> getCandles(UUID exchangeKeyId, String symbol, String timeframe) {
-        ExchangeKey exchangeKey = exchangeKeyRepository.findById(exchangeKeyId)
-                .orElseThrow(() -> new RuntimeException("Borsa bağlantısı bulunamadı."));
+    public List<CandleResponse> getCandles(UUID userId, UUID exchangeKeyId, String symbol, String timeframe) {
+        ExchangeKey exchangeKey = getOwnedExchangeKey(userId, exchangeKeyId);
 
         IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
 
         return client.getCandles(symbol, timeframe);
+    }
+
+    private ExchangeKey getOwnedExchangeKey(UUID userId, UUID exchangeKeyId) {
+        ExchangeKey exchangeKey = exchangeKeyRepository.findById(exchangeKeyId)
+                .orElseThrow(() -> new RuntimeException("Borsa bağlantısı bulunamadı."));
+
+        if (!exchangeKey.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Bu borsa bağlantısına erişim yetkiniz yok.");
+        }
+
+        return exchangeKey;
     }
 }

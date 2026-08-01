@@ -4,15 +4,15 @@ import com.aether.borsa.dto.response.PriceUpdateResponse;
 import com.aether.borsa.service.exchange.BinanceExchangeClient;
 import com.aether.borsa.service.exchange.SupportedCoins;
 import lombok.RequiredArgsConstructor;
-import org.knowm.xchange.binance.dto.meta.exchangeinfo.Symbol;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PriceStreamService {
@@ -32,7 +32,7 @@ public class PriceStreamService {
                 messagingTemplate.convertAndSend("/topic/prices", new PriceUpdateResponse(symbol, price));
 
             } catch (Exception e) {
-                System.out.println("Fiyat güncellenemedi: " + symbol + " - " + e.getMessage());
+                log.warn("Fiyat güncellenemedi: {} - {}", symbol, e.getMessage());
             }
         }
     }

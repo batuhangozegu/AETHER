@@ -33,6 +33,11 @@ server:
 jwt:
   secret: YOUR_JWT_SECRET_HERE
   expiration: 86400000
+  refresh-expiration: 604800000
 
 encryption:
   secret-key: ???
+
+exchange:
+  binance:
+    use-sandbox: true

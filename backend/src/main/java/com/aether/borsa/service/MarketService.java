@@ -8,6 +8,6 @@ import java.util.UUID;
 
 public interface MarketService {
 
-    List<CoinResponse> getCoins(UUID exchangeKeyId);
-    List<CandleResponse> getCandles(UUID exchangeKeyId, String symbol, String timeframe);
+    List<CoinResponse> getCoins(UUID userId, UUID exchangeKeyId);
+    List<CandleResponse> getCandles(UUID userId, UUID exchangeKeyId, String symbol, String timeframe);
 }

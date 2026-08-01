@@ -29,7 +29,7 @@ public class JwtTokenFilter extends OncePerRequestFilter {
         if(token != null && token.startsWith("Bearer ")){
             token = token.substring(7);
 
-            if(jwtTokenProvider.validateToken(token)){
+            if(jwtTokenProvider.validateToken(token) && !jwtTokenProvider.isRefreshToken(token)){
                 String userId = jwtTokenProvider.getUserIdFromJWT(token);
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
                 authentication.setDetails(

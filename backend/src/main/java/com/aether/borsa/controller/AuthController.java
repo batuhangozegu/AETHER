@@ -2,6 +2,7 @@ package com.aether.borsa.controller;
 
 
 import com.aether.borsa.dto.request.LoginRequest;
+import com.aether.borsa.dto.request.RefreshTokenRequest;
 import com.aether.borsa.dto.request.RegisterRequest;
 import com.aether.borsa.dto.response.TokenResponse;
 import com.aether.borsa.service.AuthService;
@@ -28,6 +29,11 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@RequestBody @Valid LoginRequest request){
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenResponse> refresh(@RequestBody @Valid RefreshTokenRequest request){
+        return ResponseEntity.ok(authService.refresh(request.getRefreshToken()));
     }
 
 }

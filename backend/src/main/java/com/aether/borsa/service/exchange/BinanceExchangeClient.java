@@ -12,6 +12,7 @@ import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.dto.account.AccountInfo;
 import org.knowm.xchange.dto.account.Balance;
 import org.knowm.xchange.dto.marketdata.Ticker;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -27,18 +28,20 @@ import java.util.Map;
 @Component
 public class BinanceExchangeClient implements IExchangeClient {
 
+    @Value("${exchange.binance.use-sandbox}")
+    private boolean useSandbox;
+
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public BinanceExchangeClient(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+
     @Override
     public BigDecimal getBalance(String apiKey, String secretKey, String asset) {
         try {
-            ExchangeSpecification exSpec = new BinanceExchange().getDefaultExchangeSpecification();
-            exSpec.setApiKey(apiKey);
-            exSpec.setSecretKey(secretKey);
-
-            // Testnet moduna geçiş - XChange'in kendi mekanizması
-            exSpec.setExchangeSpecificParametersItem(BinanceExchange.EXCHANGE_TYPE, ExchangeType.SPOT);
-            exSpec.setExchangeSpecificParametersItem("Use_Sandbox", true);
-
-            Exchange exchange = ExchangeFactory.INSTANCE.createExchange(exSpec);
+            Exchange exchange = createExchange(apiKey, secretKey);
 
             AccountInfo accountInfo = exchange.getAccountService().getAccountInfo();
             Balance balance = accountInfo.getWallet().getBalance(
@@ -55,11 +58,7 @@ public class BinanceExchangeClient implements IExchangeClient {
     @Override
     public BigDecimal getCurrentPrice(String symbol) {
         try {
-            ExchangeSpecification exSpec = new BinanceExchange().getDefaultExchangeSpecification();
-            exSpec.setExchangeSpecificParametersItem(BinanceExchange.EXCHANGE_TYPE, ExchangeType.SPOT);
-            exSpec.setExchangeSpecificParametersItem("Use_Sandbox", true);
-
-            Exchange exchange = ExchangeFactory.INSTANCE.createExchange(exSpec);
+            Exchange exchange = createExchange(null, null);
 
             CurrencyPair pair = parseSymbol(symbol);
             Ticker ticker = exchange.getMarketDataService().getTicker(pair);
@@ -74,13 +73,7 @@ public class BinanceExchangeClient implements IExchangeClient {
     @Override
     public Map<String, BigDecimal> getAllBalances(String apiKey, String secretKey) {
         try {
-            ExchangeSpecification exSpec = new BinanceExchange().getDefaultExchangeSpecification();
-            exSpec.setApiKey(apiKey);
-            exSpec.setSecretKey(secretKey);
-            exSpec.setExchangeSpecificParametersItem(BinanceExchange.EXCHANGE_TYPE, ExchangeType.SPOT);
-            exSpec.setExchangeSpecificParametersItem("Use_Sandbox", true);
-
-            Exchange exchange = ExchangeFactory.INSTANCE.createExchange(exSpec);
+            Exchange exchange = createExchange(apiKey, secretKey);
             AccountInfo accountInfo = exchange.getAccountService().getAccountInfo();
 
             Map<String, BigDecimal> balances = new HashMap<>();
@@ -102,11 +95,7 @@ public class BinanceExchangeClient implements IExchangeClient {
     @Override
     public TickerInfo getTickerInfo(String symbol) {
         try {
-            ExchangeSpecification exSpec = new BinanceExchange().getDefaultExchangeSpecification();
-            exSpec.setExchangeSpecificParametersItem(BinanceExchange.EXCHANGE_TYPE, ExchangeType.SPOT);
-            exSpec.setExchangeSpecificParametersItem("Use_Sandbox", true);
-
-            Exchange exchange = ExchangeFactory.INSTANCE.createExchange(exSpec);
+            Exchange exchange = createExchange(null, null);
 
             CurrencyPair pair = parseSymbol(symbol);
             Ticker ticker = exchange.getMarketDataService().getTicker(pair);
@@ -124,16 +113,14 @@ public class BinanceExchangeClient implements IExchangeClient {
     @Override
     public List<CandleResponse> getCandles(String symbol, String timeframe) {
         try {
-            String url = "https://testnet.binance.vision/api/v3/klines"
+            String baseUrl = useSandbox ? "https://testnet.binance.vision" : "https://api.binance.com";
+            String url = baseUrl + "/api/v3/klines"
                     + "?symbol=" + symbol
                     + "&interval=" + timeframe
                     + "&limit=100";
 
-            RestTemplate restTemplate = new RestTemplate();
-            ObjectMapper mapper = new ObjectMapper();
-
             String response = restTemplate.getForObject(url, String.class);
-            JsonNode root = mapper.readTree(response);
+            JsonNode root = objectMapper.readTree(response);
 
             List<CandleResponse> candles = new ArrayList<>();
 
@@ -155,6 +142,19 @@ public class BinanceExchangeClient implements IExchangeClient {
         } catch (Exception e) {
             throw new RuntimeException("Mum verisi alınamadı: " + e.getMessage(), e);
         }
+    }
+
+    private Exchange createExchange(String apiKey, String secretKey) {
+        ExchangeSpecification exSpec = new BinanceExchange().getDefaultExchangeSpecification();
+        if (apiKey != null) {
+            exSpec.setApiKey(apiKey);
+        }
+        if (secretKey != null) {
+            exSpec.setSecretKey(secretKey);
+        }
+        exSpec.setExchangeSpecificParametersItem(BinanceExchange.EXCHANGE_TYPE, ExchangeType.SPOT);
+        exSpec.setExchangeSpecificParametersItem("Use_Sandbox", useSandbox);
+        return ExchangeFactory.INSTANCE.createExchange(exSpec);
     }
 
     private CurrencyPair parseSymbol(String symbol) {

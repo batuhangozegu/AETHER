@@ -44,11 +44,10 @@ public class TradeServiceImpl implements TradeService {
             return List.of();
         }
 
-        List<String> symbols = getUniqueSymbols(orders);
-        Map<String, BigDecimal> priceMap = getPriceMap(symbols, orders.get(0).getExchangeKey());
+        Map<String, BigDecimal> priceMap = getPriceMap(orders);
 
         return orders.stream()
-                .map(order -> mapToResponse(order, priceMap.get(order.getSymbol())))
+                .map(order -> mapToResponse(order, priceMap.get(priceKey(order))))
                 .toList();
     }
 
@@ -120,6 +119,8 @@ public class TradeServiceImpl implements TradeService {
                 order.getAmount(),
                 order.getEntryPrice(),
                 order.getExitPrice(),
+                order.getTakeProfit(),
+                order.getStopLoss(),
                 order.getStatus(),
                 currentPnL,
                 order.getCreatedAt(),
@@ -138,21 +139,27 @@ public class TradeServiceImpl implements TradeService {
         return diff.multiply(order.getAmount());
     }
 
-    private List<String> getUniqueSymbols(List<Order> orders) {
-        return orders.stream()
-                .map(Order::getSymbol)
-                .distinct()
-                .toList();
+    private String priceKey(Order order) {
+        return order.getExchangeKey().getId() + ":" + order.getSymbol();
     }
 
-    private Map<String, BigDecimal> getPriceMap(List<String> symbols, ExchangeKey exchangeKey) {
+    private Map<String, BigDecimal> getPriceMap(List<Order> orders) {
         Map<String, BigDecimal> priceMap = new HashMap<>();
 
-        IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
+        Map<UUID, List<Order>> ordersByExchangeKeyId = orders.stream()
+                .collect(java.util.stream.Collectors.groupingBy(order -> order.getExchangeKey().getId()));
 
-        for (String symbol : symbols) {
-            BigDecimal price = client.getCurrentPrice(symbol);
-            priceMap.put(symbol, price);
+        for (List<Order> ordersForKey : ordersByExchangeKeyId.values()) {
+            ExchangeKey exchangeKey = ordersForKey.get(0).getExchangeKey();
+            IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
+
+            ordersForKey.stream()
+                    .map(Order::getSymbol)
+                    .distinct()
+                    .forEach(symbol -> {
+                        BigDecimal price = client.getCurrentPrice(symbol);
+                        priceMap.put(exchangeKey.getId() + ":" + symbol, price);
+                    });
         }
 
         return priceMap;
