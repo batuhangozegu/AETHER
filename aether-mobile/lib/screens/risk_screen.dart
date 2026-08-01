@@ -6,6 +6,7 @@ import '../models/order.dart';
 import '../models/risk_profile.dart';
 import '../services/api_service.dart';
 import '../providers/app_providers.dart';
+import 'dashboard_screen.dart' show realPortfolioProvider;
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
@@ -68,7 +69,7 @@ class RiskScreen extends ConsumerWidget {
     final profile = ref.watch(riskProvider);
     final notifier = ref.read(riskProvider.notifier);
 
-    const accountBalance = 84273.52;
+    final accountBalance = ref.watch(realPortfolioProvider).valueOrNull?.balance ?? 0.0;
     final riskUSD = accountBalance * profile.riskPerTrade / 100;
     final targetUSD = riskUSD * profile.rrRatio;
 

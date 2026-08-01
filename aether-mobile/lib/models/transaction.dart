@@ -47,8 +47,8 @@ class Transaction {
       }
     }
     final side = (order.side as String).toUpperCase() == 'BUY' ? 'buy' : 'sell';
-    final pnl = (order.currentPnL as double?) ?? 0.0;
     final price = (order.entryPrice as double?) ?? 0.0;
+    final amount = (order.amount as double);
     return Transaction(
       id:     order.id as String,
       date:   date,
@@ -56,8 +56,8 @@ class Transaction {
       side:   side,
       symbol: order.symbol as String,
       price:  price,
-      amount: (order.amount as double),
-      total:  pnl.abs(),
+      amount: amount,
+      total:  amount * price,
     );
   }
 

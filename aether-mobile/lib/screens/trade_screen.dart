@@ -8,6 +8,9 @@ import '../models/order.dart';
 import '../providers/api_keys_provider.dart';
 import '../providers/app_providers.dart';
 import '../providers/trade_provider.dart';
+import 'dashboard_screen.dart' show realPortfolioProvider;
+import 'history_screen.dart' show transactionsProvider;
+import 'risk_screen.dart' show riskProvider;
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
@@ -55,10 +58,41 @@ const _kCoinHistory = {
 };
 
 // ── Providers ──────────────────────────────────────────────────────────
-/// Coin'e göre fiyat geçmişi döndüren family provider
+
+/// Selected chart time range — drives which candle interval is requested.
+final timeRangeProvider = StateProvider<String>((_) => '24S');
+
+const _kRangeToInterval = {
+  '1S': '1m',
+  '24S': '15m',
+  '1H': '4h',
+  '1A': '1d',
+  '1Y': '1w',
+  'Max': '1M',
+};
+
+/// Coin'e göre fiyat geçmişi döndüren family provider — backend candle
+/// history'sinden gerçek kapanış fiyatlarını çeker; borsa bağlantısı yoksa
+/// veya istek başarısız olursa yaklaşık mock veriye düşer.
 final priceHistoryProvider =
     FutureProvider.family<List<double>, String>((ref, symbol) async {
-  return _kCoinHistory[symbol] ?? _kCoinHistory['BTC']!;
+  final keys = ref.watch(apiKeysProvider).valueOrNull ?? [];
+  final fallback = _kCoinHistory[symbol] ?? _kCoinHistory['BTC']!;
+  if (keys.isEmpty) return fallback;
+
+  final range = ref.watch(timeRangeProvider);
+  final interval = _kRangeToInterval[range] ?? '15m';
+  final coin = _kTradeCoins.firstWhere((c) => c.symbol == symbol,
+      orElse: () => _kTradeCoins.first);
+
+  try {
+    final api = ref.watch(apiServiceProvider);
+    final candles = await api.getCandleHistory(keys.first.id, coin.pair, interval);
+    if (candles.isEmpty) return fallback;
+    return candles.map((c) => c.close).toList();
+  } catch (_) {
+    return fallback;
+  }
 });
 
 /// Fetches the real account balance from the backend via exchange key
@@ -85,6 +119,7 @@ class TradeFormState {
   final double accountBalance; // fetched from real API
   final String selectedCoinIdx; // index into _kTradeCoins
   final String orderType;      // Limit / Market / Stop-Limit
+  final double riskPercent;    // synced from the user's risk profile
 
   const TradeFormState({
     this.side = TradeSide.buy,
@@ -94,9 +129,9 @@ class TradeFormState {
     this.accountBalance = 0.0,
     this.selectedCoinIdx = 'BTC',
     this.orderType = 'Limit',
+    this.riskPercent = 2.0,
   });
 
-  double get riskPercent => 2.0;
   double get riskAmount => accountBalance * (riskPercent / 100);
   double get stopDistance => (entryPrice - stopLoss).abs();
   double get idealUnits => stopDistance > 0 ? riskAmount / stopDistance : 0;
@@ -119,6 +154,7 @@ class TradeFormState {
     double? accountBalance,
     String? selectedCoinIdx,
     String? orderType,
+    double? riskPercent,
   }) =>
       TradeFormState(
         side: side ?? this.side,
@@ -128,6 +164,7 @@ class TradeFormState {
         accountBalance: accountBalance ?? this.accountBalance,
         selectedCoinIdx: selectedCoinIdx ?? this.selectedCoinIdx,
         orderType: orderType ?? this.orderType,
+        riskPercent: riskPercent ?? this.riskPercent,
       );
 }
 
@@ -169,8 +206,12 @@ class TradeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(tradeFormProvider);
+    final rawState = ref.watch(tradeFormProvider);
     final notifier = ref.read(tradeFormProvider.notifier);
+    // Always reflect the user's saved risk-per-trade % (falls back to the
+    // form's default of 2.0 until the risk profile has loaded).
+    final riskProfile = ref.watch(riskProvider);
+    final state = rawState.copyWith(riskPercent: riskProfile.riskPerTrade);
     final historyAsync = ref.watch(priceHistoryProvider(state.selectedCoinIdx));
     final keysAsync = ref.watch(apiKeysProvider);
     final activeOrdersAsync = ref.watch(tradeStateProvider);
@@ -263,7 +304,7 @@ class TradeScreen extends ConsumerWidget {
                       const SizedBox(height: 12),
 
                       // Time range
-                      _buildTimeRange(),
+                      _buildTimeRange(ref),
                       const SizedBox(height: 18),
 
                       // Exchange key selector
@@ -385,27 +426,31 @@ class TradeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTimeRange() {
+  Widget _buildTimeRange(WidgetRef ref) {
     final ranges = ['1S', '24S', '1H', '1A', '1Y', 'Max'];
+    final activeRange = ref.watch(timeRangeProvider);
     return Row(
       children: ranges.asMap().entries.map((e) {
-        final selected = e.key == 1;
+        final selected = e.value == activeRange;
         return Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            margin: EdgeInsets.only(right: e.key < ranges.length - 1 ? 2 : 0),
-            decoration: BoxDecoration(
-              color: selected ? AppColors.accentSoft : Colors.transparent,
-              borderRadius: BorderRadius.circular(7),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              e.value,
-              style: AppTheme.mono(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: selected ? AppColors.accent : AppColors.text3,
-                letterSpacing: 0.02,
+          child: GestureDetector(
+            onTap: () => ref.read(timeRangeProvider.notifier).state = e.value,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              margin: EdgeInsets.only(right: e.key < ranges.length - 1 ? 2 : 0),
+              decoration: BoxDecoration(
+                color: selected ? AppColors.accentSoft : Colors.transparent,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                e.value,
+                style: AppTheme.mono(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? AppColors.accent : AppColors.text3,
+                  letterSpacing: 0.02,
+                ),
               ),
             ),
           ),
@@ -493,7 +538,7 @@ class TradeScreen extends ConsumerWidget {
                     fontSize: 28, fontWeight: FontWeight.w500),
               ),
               const SizedBox(width: 6),
-              Text('BTC',
+              Text(state.coin.symbol,
                   style: GoogleFonts.spaceGrotesk(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -608,6 +653,14 @@ class TradeScreen extends ConsumerWidget {
     );
     try {
       await ref.read(tradeStateProvider.notifier).createOrder(payload);
+
+      // İşlem başarılı → bakiye provider'larını yenile
+      // Backend'e 1sn işlem için süre ver, sonra yenile
+      await Future.delayed(const Duration(milliseconds: 1200));
+      ref.invalidate(accountBalanceProvider);
+      ref.invalidate(realPortfolioProvider);
+      ref.invalidate(transactionsProvider);
+
       if (context.mounted) {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderSuccessScreen()));
       }

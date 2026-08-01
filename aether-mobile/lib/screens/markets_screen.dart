@@ -14,7 +14,9 @@ import '../widgets/sparkline_chart.dart';
 import 'trade_screen.dart';
 
 /// Coin sembolünden deterministik ama görsel olarak farklı sparkline üretir.
-List<double> _sparklineFor(String symbol, double price, bool isUp) {
+/// Yalnızca gerçek mum verisi yüklenene kadar (veya başarısız olursa) yer
+/// tutucu olarak kullanılır — gerçek fiyat hareketini yansıtmaz.
+List<double> _sparklineFallback(String symbol, double price, bool isUp) {
   // symbol karakterlerinin ASCII toplamını seed olarak kullan
   final seed = symbol.codeUnits.fold(0, (a, b) => a + b);
   // 7 adımlık faktör serisi — her coin için benzersiz bir desen
@@ -52,6 +54,21 @@ final marketCoinsProvider = FutureProvider<List<CoinData>>((ref) async {
   if (keys.isEmpty) return [];
   try {
     return await apiService.getMarketCoins(keys.first.id);
+  } catch (_) {
+    return [];
+  }
+});
+
+/// Backend candle history'sinden gerçek kapanış fiyatlarını döner.
+/// Borsa bağlantısı yoksa veya istek başarısız olursa boş liste döner —
+/// çağıran taraf bu durumda [_sparklineFallback]'e düşer.
+final _candleCloseHistoryProvider = FutureProvider.family<List<double>,
+    ({String exchangeKeyId, String symbol, String interval})>((ref, params) async {
+  try {
+    final api = ref.watch(apiServiceProvider);
+    final candles =
+        await api.getCandleHistory(params.exchangeKeyId, params.symbol, params.interval);
+    return candles.map((c) => c.close).toList();
   } catch (_) {
     return [];
   }
@@ -207,6 +224,7 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
               );
             }
             final rows = _filtered(coins);
+            final keys = ref.watch(apiKeysProvider).valueOrNull ?? [];
             return SliverPadding(
               padding: const EdgeInsets.fromLTRB(22, 0, 22, 44),
               sliver: SliverList(delegate: SliverChildBuilderDelegate((ctx, i) {
@@ -214,6 +232,15 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
                 final meta = _kCoinMeta[m.symbol];
                 final name = meta?['name'] as String? ?? m.symbol;
                 final rank = meta?['rank'] as int? ?? 0;
+                final sparkPoints = keys.isEmpty
+                    ? null
+                    : ref
+                        .watch(_candleCloseHistoryProvider((
+                          exchangeKeyId: keys.first.id,
+                          symbol: '${m.symbol}USDT',
+                          interval: '1h',
+                        )))
+                        .valueOrNull;
                 return GestureDetector(
                   onTap: () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => CoinDetailScreen(coin: m, name: name, rank: rank))),
@@ -240,7 +267,9 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
                       ]),
                       const SizedBox(width: 10),
                       SparklineChart(
-                        points: _sparklineFor(m.symbol, m.price, m.isUp),
+                        points: (sparkPoints != null && sparkPoints.isNotEmpty)
+                            ? sparkPoints
+                            : _sparklineFallback(m.symbol, m.price, m.isUp),
                         color: m.isUp ? AppColors.profit : AppColors.loss,
                         width: 48, height: 22),
                     ]),
@@ -274,6 +303,21 @@ class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
   Widget build(BuildContext context) {
     final m = widget.coin;
     final keys = ref.watch(apiKeysProvider).valueOrNull ?? [];
+    final candlePoints = keys.isEmpty
+        ? null
+        : ref
+            .watch(_candleCloseHistoryProvider((
+              exchangeKeyId: keys.first.id,
+              symbol: '${m.symbol}USDT',
+              interval: _ranges[_rangeIdx],
+            )))
+            .valueOrNull;
+    final chartPoints = (candlePoints != null && candlePoints.isNotEmpty)
+        ? candlePoints
+        : [
+            m.price * 0.94, m.price * 0.96, m.price * 0.95, m.price * 0.97,
+            m.price * 0.98, m.price * 0.97, m.price * 0.99, m.price,
+          ];
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
@@ -319,8 +363,7 @@ class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
             Container(height: 140, child: CustomPaint(
               size: const Size(double.infinity, 140),
               painter: _AreaChartPainter(
-                points: [m.price * 0.94, m.price * 0.96, m.price * 0.95, m.price * 0.97,
-                         m.price * 0.98, m.price * 0.97, m.price * 0.99, m.price],
+                points: chartPoints,
                 color: AppColors.accent),
             )),
             const SizedBox(height: 12),

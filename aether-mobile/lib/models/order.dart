@@ -10,6 +10,8 @@ class OrderModel {
   final double amount;
   final double? entryPrice;  // entry price
   final double? exitPrice;   // exit price (set when closed)
+  final double? takeProfit;
+  final double? stopLoss;
   final String status;       // "OPEN" | "CLOSED" | "CANCELED" | "TRIGGERED"
   final double? currentPnL;  // nullable — backend live calculates
   final String? createdAt;
@@ -22,6 +24,8 @@ class OrderModel {
     required this.amount,
     this.entryPrice,
     this.exitPrice,
+    this.takeProfit,
+    this.stopLoss,
     required this.status,
     this.currentPnL,
     this.createdAt,
@@ -39,6 +43,8 @@ class OrderModel {
         amount: (json['amount'] as num?)?.toDouble() ?? 0,
         entryPrice: (json['entryPrice'] as num?)?.toDouble(),
         exitPrice: (json['exitPrice'] as num?)?.toDouble(),
+        takeProfit: (json['takeProfit'] as num?)?.toDouble(),
+        stopLoss: (json['stopLoss'] as num?)?.toDouble(),
         status: (json['status'] as String?) ?? 'OPEN',
         currentPnL: (json['currentPnL'] as num?)?.toDouble(),
         createdAt: (json['createdAt'] as String?),

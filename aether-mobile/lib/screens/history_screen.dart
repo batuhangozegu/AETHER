@@ -10,12 +10,10 @@ import '../utils/formatters.dart';
 import '../widgets/coin_avatar.dart';
 
 // ── Provider ───────────────────────────────────────────────────────────
-/// GET /api/v1/trades/active → tüm emirleri çeker, Transaction'a dönüştürür.
-/// /api/v1/trades/history backendde henüz yok, active endpoint kullanılıyor.
+/// GET /api/v1/trades/history → kapanmış emirleri Transaction'a dönüştürür.
 final transactionsProvider = FutureProvider<List<Transaction>>((ref) async {
   try {
-    final orders = await ref.watch(apiServiceProvider).getActiveOrders();
-    return orders.map(Transaction.fromOrder).toList();
+    return await ref.watch(apiServiceProvider).getTransactions();
   } catch (_) {
     return [];
   }
