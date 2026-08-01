@@ -5,16 +5,9 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 
 @Getter
-public class LoginRequest {
+public class ForgotPasswordRequest {
 
     @NotBlank(message = "Email boş olamaz")
     @Email(message = "Geçerli bir email giriniz")
     private String email;
-
-    @NotBlank(message = "Şifre boş olamaz")
-    private String password;
-
-    /** Only required when the account has 2FA enabled. */
-    private String twoFactorCode;
-
 }

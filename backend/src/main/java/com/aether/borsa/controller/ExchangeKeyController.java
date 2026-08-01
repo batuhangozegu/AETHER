@@ -1,6 +1,7 @@
 package com.aether.borsa.controller;
 
 import com.aether.borsa.dto.request.AddExchangeKeyRequest;
+import com.aether.borsa.dto.request.UpdateExchangeKeyRequest;
 import com.aether.borsa.dto.response.ExchangeKeyResponse;
 import com.aether.borsa.model.entity.ExchangeKey;
 import com.aether.borsa.service.ExchangeKeyService;
@@ -30,6 +31,13 @@ public class ExchangeKeyController {
     public ResponseEntity<ExchangeKeyResponse> addExchangeKeys(Authentication authentication, @RequestBody @Valid AddExchangeKeyRequest request) throws Exception{
         UUID userId = getUserId(authentication);
         return ResponseEntity.status(201).body(exchangeKeyService.addExchangeKey(userId,request));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ExchangeKeyResponse> updateExchangeKey(
+            Authentication authentication, @PathVariable UUID id, @RequestBody @Valid UpdateExchangeKeyRequest request) throws Exception {
+        UUID userId = getUserId(authentication);
+        return ResponseEntity.ok(exchangeKeyService.updateExchangeKey(userId, id, request));
     }
 
     @DeleteMapping("/{id}")

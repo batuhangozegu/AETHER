@@ -10,6 +10,7 @@ import com.aether.borsa.model.enums.TradeSide;
 import com.aether.borsa.repository.ExchangeKeyRepository;
 import com.aether.borsa.repository.OrderRepository;
 import com.aether.borsa.repository.UserRepository;
+import com.aether.borsa.service.NotificationService;
 import com.aether.borsa.service.TradeService;
 import com.aether.borsa.service.exchange.ExchangeClientFactory;
 import com.aether.borsa.service.exchange.IExchangeClient;
@@ -32,6 +33,7 @@ public class TradeServiceImpl implements TradeService {
     private final UserRepository userRepository;
     private final ExchangeKeyRepository exchangeKeyRepository;
     private final ExchangeClientFactory exchangeClientFactory;
+    private final NotificationService notificationService;
 
     @Override
     public List<OrderResponse> getActiveOrders(UUID userId) {
@@ -103,6 +105,15 @@ public class TradeServiceImpl implements TradeService {
         order.setExitPrice(currentPrice);
 
         Order updated = orderRepository.save(order);
+
+        BigDecimal pnl = calculatePnL(updated, currentPrice);
+        String pnlText = (pnl.signum() >= 0 ? "+" : "") + pnl + " USD";
+        notificationService.notify(
+                order.getUser(),
+                pnl.signum() >= 0 ? "success" : "loss",
+                "Pozisyon kapatıldı: " + order.getSymbol(),
+                "PnL: " + pnlText
+        );
 
         return mapToResponse(updated, currentPrice);
     }

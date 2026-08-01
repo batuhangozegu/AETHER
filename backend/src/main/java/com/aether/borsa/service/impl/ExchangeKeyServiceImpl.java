@@ -1,6 +1,7 @@
 package com.aether.borsa.service.impl;
 
 import com.aether.borsa.dto.request.AddExchangeKeyRequest;
+import com.aether.borsa.dto.request.UpdateExchangeKeyRequest;
 import com.aether.borsa.dto.response.ExchangeKeyResponse;
 import com.aether.borsa.model.entity.ExchangeKey;
 import com.aether.borsa.model.entity.User;
@@ -81,6 +82,34 @@ public class ExchangeKeyServiceImpl implements ExchangeKeyService {
             throw new RuntimeException("Access denied: this exchange key does not belong to you.");
         }
         exchangeKeyRepository.delete(exchangeKey);
+    }
+
+    @Override
+    public ExchangeKeyResponse updateExchangeKey(UUID userId, UUID keyId, UpdateExchangeKeyRequest request) throws Exception {
+        ExchangeKey exchangeKey = exchangeKeyRepository.findById(keyId)
+                .orElseThrow(() -> new RuntimeException("Exchange key not found."));
+
+        if (!exchangeKey.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Access denied: this exchange key does not belong to you.");
+        }
+
+        String maskedApiKey = maskApiKey(request.getApiKey());
+
+        exchangeKey.setEncryptedApiKey(encryptionUtil.encrypt(request.getApiKey()));
+        exchangeKey.setEncryptedSecretKey(encryptionUtil.encrypt(request.getSecretKey()));
+        exchangeKey.setMaskedApiKey(maskedApiKey);
+        exchangeKey.setCanRead(request.isCanRead());
+        exchangeKey.setCanTrade(request.isCanTrade());
+        exchangeKeyRepository.save(exchangeKey);
+
+        return new ExchangeKeyResponse(
+                exchangeKey.getId(),
+                exchangeKey.getExchangeName(),
+                maskedApiKey,
+                exchangeKey.isCanRead(),
+                exchangeKey.isCanTrade(),
+                "ACTIVE"
+        );
     }
 
     private String maskApiKey(String apiKey){

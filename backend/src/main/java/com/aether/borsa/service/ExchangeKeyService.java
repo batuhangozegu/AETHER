@@ -1,6 +1,7 @@
 package com.aether.borsa.service;
 
 import com.aether.borsa.dto.request.AddExchangeKeyRequest;
+import com.aether.borsa.dto.request.UpdateExchangeKeyRequest;
 import com.aether.borsa.dto.response.ExchangeKeyResponse;
 
 import java.util.List;
@@ -11,4 +12,5 @@ public interface ExchangeKeyService {
     ExchangeKeyResponse addExchangeKey(UUID userId, AddExchangeKeyRequest request) throws Exception;
     List<ExchangeKeyResponse> getExchangeKeys(UUID userId);
     void deleteExchangeKeys(UUID userId, UUID keyId);
+    ExchangeKeyResponse updateExchangeKey(UUID userId, UUID keyId, UpdateExchangeKeyRequest request) throws Exception;
 }

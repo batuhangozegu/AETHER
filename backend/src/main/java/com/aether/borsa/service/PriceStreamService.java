@@ -20,6 +20,7 @@ public class PriceStreamService {
     private final BinanceExchangeClient binanceExchangeClient;
     private final RedisTemplate<String, String> redisTemplate;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PriceAlarmService priceAlarmService;
 
     @Scheduled(fixedRate = 5000)
     public void updatePrices() {
@@ -30,6 +31,8 @@ public class PriceStreamService {
                 redisTemplate.opsForValue().set("price:" + symbol, price.toString());
 
                 messagingTemplate.convertAndSend("/topic/prices", new PriceUpdateResponse(symbol, price));
+
+                priceAlarmService.checkAlarms(symbol, price);
 
             } catch (Exception e) {
                 log.warn("Fiyat güncellenemedi: {} - {}", symbol, e.getMessage());
