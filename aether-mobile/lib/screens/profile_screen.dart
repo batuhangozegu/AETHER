@@ -30,24 +30,31 @@ final userProvider = Provider<User>((_) => const User(
   pnlPercent:   0,
 ));
 
-// ── Local display name (editable until backend ready) ───────────────────
-final _localNameProvider  = StateProvider<String?>((ref) => null);
-final _localEmailProvider = StateProvider<String?>((ref) => null);
-
 // ── Prefs ───────────────────────────────────────────────────────────────
 class _Prefs {
-  final bool twoFA, biometric, priceAlerts, riskAlerts;
-  const _Prefs({this.twoFA=true, this.biometric=true, this.priceAlerts=true, this.riskAlerts=true});
-  _Prefs cw({bool? twoFA, bool? biometric, bool? priceAlerts, bool? riskAlerts}) => _Prefs(
-    twoFA: twoFA??this.twoFA, biometric: biometric??this.biometric,
+  final bool biometric, priceAlerts, riskAlerts;
+  const _Prefs({this.biometric=true, this.priceAlerts=true, this.riskAlerts=true});
+  _Prefs cw({bool? biometric, bool? priceAlerts, bool? riskAlerts}) => _Prefs(
+    biometric: biometric??this.biometric,
     priceAlerts: priceAlerts??this.priceAlerts, riskAlerts: riskAlerts??this.riskAlerts);
 }
 class _PrefsN extends StateNotifier<_Prefs> {
   _PrefsN() : super(const _Prefs());
-  void set({bool? twoFA, bool? biometric, bool? priceAlerts, bool? riskAlerts}) =>
-      state = state.cw(twoFA: twoFA, biometric: biometric, priceAlerts: priceAlerts, riskAlerts: riskAlerts);
+  void set({bool? biometric, bool? priceAlerts, bool? riskAlerts}) =>
+      state = state.cw(biometric: biometric, priceAlerts: priceAlerts, riskAlerts: riskAlerts);
 }
 final prefsProvider = StateNotifierProvider<_PrefsN, _Prefs>((_) => _PrefsN());
+
+/// Backend'deki gerçek 2FA durumu — GET /api/v1/users/profile.twoFaEnabled
+final twoFactorEnabledProvider = FutureProvider<bool>((ref) async {
+  final api = ref.watch(apiServiceProvider);
+  try {
+    final profile = await api.getProfile();
+    return profile.twoFaEnabled;
+  } catch (_) {
+    return false;
+  }
+});
 
 // ── Screen ──────────────────────────────────────────────────────────────
 class ProfileScreen extends ConsumerWidget {
@@ -60,11 +67,10 @@ class ProfileScreen extends ConsumerWidget {
     final locale       = ref.watch(languageProvider);
     final apiKeysAsync = ref.watch(apiKeysProvider);
     final apiKeysN     = ref.read(apiKeysProvider.notifier);
-    final localName    = ref.watch(_localNameProvider);
-    final localEmail   = ref.watch(_localEmailProvider);
     final apiKeys      = apiKeysAsync.valueOrNull ?? [];
     final authUser     = ref.watch(authUserProvider).valueOrNull;
     final portfolioAsync = ref.watch(realPortfolioProvider);
+    final twoFaEnabled = ref.watch(twoFactorEnabledProvider).valueOrNull ?? false;
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
@@ -84,12 +90,27 @@ class ProfileScreen extends ConsumerWidget {
                   onTap: () async {
                     final result = await showProfileEditSheet(
                       context,
-                      name: localName ?? (authUser?.username ?? ''),
-                      email: localEmail ?? (authUser?.email ?? ''),
+                      name: authUser?.username ?? '',
+                      email: authUser?.email ?? '',
                     );
-                    if (result != null) {
-                      ref.read(_localNameProvider.notifier).state  = result['name'];
-                      ref.read(_localEmailProvider.notifier).state = result['email'];
+                    if (result != null && context.mounted) {
+                      try {
+                        final api = ref.read(apiServiceProvider);
+                        final updated = await api.updateProfile(
+                          username: result['name'] ?? '',
+                          email: result['email'] ?? '',
+                        );
+                        await ref.read(authUserProvider.notifier).saveUser(
+                          username: updated.username,
+                          email: updated.email,
+                        );
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Profil güncellenemedi: $e'), backgroundColor: AppColors.loss),
+                          );
+                        }
+                      }
                     }
                   },
                   child: Container(
@@ -107,11 +128,10 @@ class ProfileScreen extends ConsumerWidget {
 
             // ── Avatar + name ──────────────────────────────────────────
             Builder(builder: (_) {
-              // Priority: manually edited > saved auth user > empty fallback
               final baseName  = authUser?.username ?? '';
               final baseEmail = authUser?.email ?? '';
-              final name  = localName  ?? (baseName.isNotEmpty  ? baseName  : 'Kullanıcı');
-              final email = localEmail ?? (baseEmail.isNotEmpty ? baseEmail : '');
+              final name  = baseName.isNotEmpty  ? baseName  : 'Kullanıcı';
+              final email = baseEmail;
               final initials = name.trim().split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase();
               return _ProfileHeader(initials: initials.isEmpty ? 'K' : initials, name: name, email: email, kycVerified: false);
             }),
@@ -126,12 +146,26 @@ class ProfileScreen extends ConsumerWidget {
             const _Label('Güvenlik'),
             Padding(padding: const EdgeInsets.symmetric(horizontal: 22), child: GlassCard(child: Column(children: [
               SettingsToggleRow(icon: const Icon(Icons.security, color: AppColors.text2, size: 16),
-                  title: 'İki Faktörlü Doğrulama', subtitle: 'Authenticator · son: 2 gün önce',
-                  value: prefs.twoFA, onChanged: (v) {
+                  title: 'İki Faktörlü Doğrulama', subtitle: twoFaEnabled ? 'Authenticator ile etkin' : 'Kapalı',
+                  value: twoFaEnabled, onChanged: (v) async {
                     if (v) {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const TwoFactorSetupScreen()));
+                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const TwoFactorSetupScreen()));
+                      ref.invalidate(twoFactorEnabledProvider);
+                    } else {
+                      final code = await _prompt2FACode(context, title: '2FA\'yı Kapat',
+                          message: 'Kapatmak için authenticator uygulamandaki kodu gir.');
+                      if (code == null || code.isEmpty) return;
+                      try {
+                        await ref.read(apiServiceProvider).disable2fa(code);
+                        ref.invalidate(twoFactorEnabledProvider);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('2FA kapatılamadı: $e'), backgroundColor: AppColors.loss),
+                          );
+                        }
+                      }
                     }
-                    prefsN.set(twoFA: v);
                   }),
               const Divider(color: AppColors.hairline, height: 0.5, indent: 56),
               SettingsToggleRow(icon: const Icon(Icons.face, color: AppColors.text2, size: 16),
@@ -166,7 +200,8 @@ class ProfileScreen extends ConsumerWidget {
                       key: ValueKey(k.id),
                       apiKey: k,
                       onEdit: () => showApiKeyDialog(context, existing: k,
-                          onSave: (ex, mask) => apiKeysN.editLocal(k.id, ex, mask)),
+                          onSave: (apiKey, secretKey, canRead, canTrade) => apiKeysN.updateKey(
+                              k.id, apiKey: apiKey, secretKey: secretKey, canRead: canRead, canTrade: canTrade)),
                       onDelete: () => apiKeysN.removeKey(k.id),
                     ),
                   ];
@@ -236,6 +271,39 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// 6 haneli authenticator kodu isteyen basit bir dialog.
+Future<String?> _prompt2FACode(BuildContext context, {required String title, required String message}) async {
+  final ctrl = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF111828),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.hairline, width: 0.5),
+      ),
+      title: Text(title, style: GoogleFonts.spaceGrotesk(color: AppColors.text1, fontWeight: FontWeight.w600)),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(message, style: GoogleFonts.spaceGrotesk(color: AppColors.text3, fontSize: 12)),
+        const SizedBox(height: 12),
+        TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          style: AppTheme.mono(fontSize: 18, letterSpacing: 4),
+          decoration: const InputDecoration(counterText: '', hintText: '000000'),
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx),
+            child: Text('İptal', style: GoogleFonts.spaceGrotesk(color: AppColors.text3))),
+        TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: Text('Onayla', style: GoogleFonts.spaceGrotesk(color: AppColors.accent, fontWeight: FontWeight.w600))),
+      ],
+    ),
+  );
 }
 
 // ── Widgets ─────────────────────────────────────────────────────────────

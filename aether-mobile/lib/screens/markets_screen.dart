@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/market.dart';
 import '../providers/api_keys_provider.dart';
 import '../providers/app_providers.dart';
+import '../providers/live_prices_provider.dart';
+import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
@@ -73,6 +75,33 @@ final _candleCloseHistoryProvider = FutureProvider.family<List<double>,
     return [];
   }
 });
+
+// ── Favorites ───────────────────────────────────────────────────────────
+class FavoritesNotifier extends AsyncNotifier<Set<String>> {
+  ApiService get _api => ref.read(apiServiceProvider);
+
+  @override
+  Future<Set<String>> build() async {
+    try {
+      return await _api.getFavorites();
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> toggle(String symbol) async {
+    final current = state.valueOrNull ?? {};
+    if (current.contains(symbol)) {
+      await _api.removeFavorite(symbol);
+      state = AsyncData({...current}..remove(symbol));
+    } else {
+      await _api.addFavorite(symbol);
+      state = AsyncData({...current, symbol});
+    }
+  }
+}
+
+final favoritesProvider = AsyncNotifierProvider<FavoritesNotifier, Set<String>>(FavoritesNotifier.new);
 
 class MarketsScreen extends ConsumerStatefulWidget {
   const MarketsScreen({super.key});
@@ -225,10 +254,12 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
             }
             final rows = _filtered(coins);
             final keys = ref.watch(apiKeysProvider).valueOrNull ?? [];
+            final livePrices = ref.watch(livePricesProvider);
             return SliverPadding(
               padding: const EdgeInsets.fromLTRB(22, 0, 22, 44),
               sliver: SliverList(delegate: SliverChildBuilderDelegate((ctx, i) {
                 final m = rows[i];
+                final displayPrice = livePrices[m.symbol] ?? m.price;
                 final meta = _kCoinMeta[m.symbol];
                 final name = meta?['name'] as String? ?? m.symbol;
                 final rank = meta?['rank'] as int? ?? 0;
@@ -260,7 +291,7 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
                         Text(name, style: GoogleFonts.spaceGrotesk(fontSize: 10.5, color: AppColors.text3)),
                       ])),
                       Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        Text('\$${m.price < 10 ? m.price.toStringAsFixed(3) : Formatters.price(m.price)}',
+                        Text('\$${displayPrice < 10 ? displayPrice.toStringAsFixed(3) : Formatters.price(displayPrice)}',
                           style: AppTheme.mono(fontSize: 13, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 2),
                         DeltaPill(value: m.priceChangePercent),
@@ -303,6 +334,9 @@ class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
   Widget build(BuildContext context) {
     final m = widget.coin;
     final keys = ref.watch(apiKeysProvider).valueOrNull ?? [];
+    final favorites = ref.watch(favoritesProvider).valueOrNull ?? {};
+    final isFavorite = favorites.contains(m.symbol);
+    final livePrice = ref.watch(livePricesProvider)[m.symbol] ?? m.price;
     final candlePoints = keys.isEmpty
         ? null
         : ref
@@ -332,9 +366,13 @@ class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
               const SizedBox(width: 8),
               Text('Piyasalar', style: GoogleFonts.spaceGrotesk(fontSize: 12, color: AppColors.text3)),
               const Spacer(),
-              _IconBtn(icon: Icons.star_border_rounded, onTap: () {}),
+              _IconBtn(
+                icon: isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+                color: isFavorite ? const Color(0xFFF5B969) : AppColors.text2,
+                onTap: () => ref.read(favoritesProvider.notifier).toggle(m.symbol),
+              ),
               const SizedBox(width: 8),
-              _IconBtn(icon: Icons.notifications_outlined, onTap: () {}),
+              _IconBtn(icon: Icons.notifications_outlined, onTap: () => _showCreateAlarmSheet(context, ref, m.symbol, livePrice)),
             ]),
             const SizedBox(height: 18),
             // Header
@@ -351,7 +389,7 @@ class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
                 ]),
                 const SizedBox(height: 4),
                 Row(children: [
-                  Text('\$${Formatters.price(m.price)}',
+                  Text('\$${Formatters.price(livePrice)}',
                     style: AppTheme.mono(fontSize: 26, fontWeight: FontWeight.w500, letterSpacing: -0.5)),
                   const SizedBox(width: 8),
                   DeltaPill(value: m.priceChangePercent),
@@ -389,7 +427,7 @@ class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
               border: Border.all(color: AppColors.hairline, width: 0.5),
               borderRadius: BorderRadius.circular(14)), child: Column(children: [
               _StatRow(label: '24s Değişim', value: '${m.priceChangePercent >= 0 ? '+' : ''}${m.priceChangePercent.toStringAsFixed(2)}%', borderTop: false, borderLeft: false),
-              _StatRow(label: 'Güncel Fiyat', value: '\$${Formatters.price(m.price)}', borderTop: false, borderLeft: true),
+              _StatRow(label: 'Güncel Fiyat', value: '\$${Formatters.price(livePrice)}', borderTop: false, borderLeft: true),
             ])),
             const SizedBox(height: 22),
             // CTAs — navigate to Trade screen with coin pre-selected
@@ -432,14 +470,101 @@ class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
 class _IconBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _IconBtn({required this.icon, required this.onTap});
+  final Color? color;
+  const _IconBtn({required this.icon, required this.onTap, this.color});
   @override
   Widget build(BuildContext context) => GestureDetector(onTap: onTap, child: Container(
     width: 32, height: 32, decoration: BoxDecoration(
       color: const Color(0x0AFFFFFF),
       border: Border.all(color: AppColors.hairline, width: 0.5),
       borderRadius: BorderRadius.circular(9)),
-    child: Icon(icon, color: AppColors.text2, size: 15)));
+    child: Icon(icon, color: color ?? AppColors.text2, size: 15)));
+}
+
+/// Fiyat alarmı oluşturma bottom sheet'i — backend'e POST /api/v1/alarms atar.
+void _showCreateAlarmSheet(BuildContext context, WidgetRef ref, String symbol, double currentPrice) {
+  final priceCtrl = TextEditingController(text: currentPrice.toStringAsFixed(2));
+  String direction = 'ABOVE';
+
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: const Color(0xFF111828),
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (ctx) => StatefulBuilder(builder: (ctx, setState) => Padding(
+      padding: EdgeInsets.fromLTRB(22, 20, 22, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('$symbol için Fiyat Alarmı', style: GoogleFonts.spaceGrotesk(
+            fontSize: 17, fontWeight: FontWeight.w600, color: AppColors.text1)),
+        const SizedBox(height: 6),
+        Text('Hedef fiyata ulaşıldığında bildirim alırsın.',
+            style: GoogleFonts.spaceGrotesk(fontSize: 12, color: AppColors.text3)),
+        const SizedBox(height: 18),
+        Row(children: [
+          Expanded(child: GestureDetector(
+            onTap: () => setState(() => direction = 'ABOVE'),
+            child: Container(padding: const EdgeInsets.symmetric(vertical: 10), alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: direction == 'ABOVE' ? AppColors.profitSoft : AppColors.surface2,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: direction == 'ABOVE' ? AppColors.profit : AppColors.hairline, width: 0.5)),
+              child: Text('Üzerine çıkınca', style: GoogleFonts.spaceGrotesk(fontSize: 12.5, fontWeight: FontWeight.w600,
+                color: direction == 'ABOVE' ? AppColors.profit : AppColors.text2))))),
+          const SizedBox(width: 8),
+          Expanded(child: GestureDetector(
+            onTap: () => setState(() => direction = 'BELOW'),
+            child: Container(padding: const EdgeInsets.symmetric(vertical: 10), alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: direction == 'BELOW' ? AppColors.lossSoft : AppColors.surface2,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: direction == 'BELOW' ? AppColors.loss : AppColors.hairline, width: 0.5)),
+              child: Text('Altına düşünce', style: GoogleFonts.spaceGrotesk(fontSize: 12.5, fontWeight: FontWeight.w600,
+                color: direction == 'BELOW' ? AppColors.loss : AppColors.text2))))),
+        ]),
+        const SizedBox(height: 14),
+        Text('Hedef Fiyat', style: GoogleFonts.spaceGrotesk(fontSize: 11, color: AppColors.text3)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: priceCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: AppTheme.mono(fontSize: 16),
+          decoration: InputDecoration(
+            prefixText: '\$ ',
+            filled: true, fillColor: AppColors.surface2,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.hairline, width: 0.5)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.hairline, width: 0.5)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.accent, width: 1)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 20),
+        SizedBox(width: double.infinity, child: ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 14)),
+          onPressed: () async {
+            final target = double.tryParse(priceCtrl.text.replaceAll(',', '.'));
+            if (target == null) return;
+            try {
+              await ref.read(apiServiceProvider).createAlarm(symbol: symbol, targetPrice: target, direction: direction);
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Fiyat alarmı oluşturuldu')));
+              }
+            } catch (e) {
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text('Alarm oluşturulamadı: $e'), backgroundColor: AppColors.loss));
+              }
+            }
+          },
+          child: Text('Alarm Oluştur', style: GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+        )),
+      ]),
+    )),
+  );
 }
 
 class _StatRow extends StatelessWidget {

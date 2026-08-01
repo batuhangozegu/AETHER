@@ -21,6 +21,9 @@ dependencies:
   # HTTP Client (Spring backend)
   dio: ^5.4.3+1
 
+  # Realtime price stream (STOMP over WebSocket)
+  stomp_dart_client: ^2.1.2
+
   # Fonts
   google_fonts: ^6.2.1
 

@@ -83,12 +83,19 @@ class ApiKeysNotifier extends AsyncNotifier<List<ApiKey>> {
     state = AsyncData(current.where((k) => k.id != id).toList());
   }
 
-  /// Yerel düzenleme (backend'in edit endpoint'i olmadığından sadece UI günceller).
-  /// update ismi AsyncNotifier.update ile çakıştığından editLocal kullanılıyor.
-  void editLocal(String id, String exchange, String mask) {
+  /// Backend'e PUT atar, başarılı olursa listedeki kaydı günceller.
+  /// update ismi AsyncNotifier.update ile çakıştığından updateKey kullanılıyor.
+  Future<void> updateKey(String id, {
+    required String apiKey,
+    required String secretKey,
+    required bool canRead,
+    required bool canTrade,
+  }) async {
+    final model = await _api.updateExchangeKey(id,
+        apiKey: apiKey, secretKey: secretKey, canRead: canRead, canTrade: canTrade);
     final current = state.valueOrNull ?? [];
     state = AsyncData(
-      current.map((k) => k.id == id ? k.copyWith(exchange: exchange, mask: mask) : k).toList(),
+      current.map((k) => k.id == id ? ApiKey.fromModel(model) : k).toList(),
     );
   }
 }

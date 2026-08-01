@@ -10,16 +10,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/asset.dart';
 import '../models/exchange_key.dart';
 import '../models/market.dart';
+import '../models/notification.dart';
 import '../models/order.dart';
 import '../models/order_request.dart';
+import '../models/price_alarm.dart';
 import '../models/risk_profile.dart';
 import '../models/transaction.dart';
+import '../models/user_profile.dart';
 
 class ApiService {
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://192.168.68.242:8080',
   );
+
+  /// Public alias so other layers (e.g. the WebSocket price stream) can
+  /// derive their own URL from the same configured host without duplicating it.
+  static const String baseUrl = _baseUrl;
 
   late final Dio _dio;
 
@@ -41,7 +48,8 @@ class ApiService {
       error: true,
     ));
 
-    // JWT interceptor — her isteğe token ekler, 401'de token siler
+    // JWT interceptor — her isteğe token ekler; 401 alınca refresh token ile
+    // bir kez yenilemeyi dener, o da başarısız olursa oturumu temizler.
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final prefs = await SharedPreferences.getInstance();
@@ -52,9 +60,35 @@ class ApiService {
         handler.next(options);
       },
       onError: (error, handler) async {
-        if (error.response?.statusCode == 401) {
+        final isAuthEndpoint = error.requestOptions.path.startsWith('/api/v1/auth/');
+        final alreadyRetried = error.requestOptions.extra['retried'] == true;
+
+        if (error.response?.statusCode == 401 && !isAuthEndpoint && !alreadyRetried) {
           final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('jwt_token');
+          final refreshToken = prefs.getString('refresh_token');
+          if (refreshToken != null) {
+            try {
+              final refreshRes = await Dio(BaseOptions(baseUrl: _baseUrl)).post(
+                '/api/v1/auth/refresh',
+                data: {'refreshToken': refreshToken},
+              );
+              final newToken = refreshRes.data['accessToken'] as String;
+              final newRefreshToken = refreshRes.data['refreshToken'] as String?;
+              await prefs.setString('jwt_token', newToken);
+              if (newRefreshToken != null) await prefs.setString('refresh_token', newRefreshToken);
+
+              final retryOptions = error.requestOptions
+                ..headers['Authorization'] = 'Bearer $newToken'
+                ..extra['retried'] = true;
+              final retryRes = await _dio.fetch(retryOptions);
+              return handler.resolve(retryRes);
+            } catch (_) {
+              await prefs.remove('jwt_token');
+              await prefs.remove('refresh_token');
+            }
+          } else {
+            await prefs.remove('jwt_token');
+          }
         }
         handler.next(error);
       },
@@ -64,14 +98,20 @@ class ApiService {
   // ── AUTH ──────────────────────────────────────────────────────────────
 
   /// POST /api/v1/auth/login
-  Future<String> login(String email, String password) async {
+  /// [twoFactorCode] only needs to be passed when the account has 2FA enabled;
+  /// if omitted and the account requires it, the backend responds with an
+  /// error containing "2FA code required." so the caller can prompt for it.
+  Future<String> login(String email, String password, {String? twoFactorCode}) async {
     final res = await _dio.post('/api/v1/auth/login', data: {
       'email': email,
       'password': password,
+      if (twoFactorCode != null && twoFactorCode.isNotEmpty) 'twoFactorCode': twoFactorCode,
     });
     final token = res.data['accessToken'] as String;
+    final refreshToken = res.data['refreshToken'] as String?;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('jwt_token', token);
+    if (refreshToken != null) await prefs.setString('refresh_token', refreshToken);
     return token;
   }
 
@@ -83,8 +123,10 @@ class ApiService {
       'password': password,
     });
     final token = res.data['accessToken'] as String;
+    final refreshToken = res.data['refreshToken'] as String?;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('jwt_token', token);
+    if (refreshToken != null) await prefs.setString('refresh_token', refreshToken);
     return token;
   }
 
@@ -92,6 +134,7 @@ class ApiService {
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('jwt_token');
+    await prefs.remove('refresh_token');
   }
 
   Future<bool> isAuthenticated() async {
@@ -274,5 +317,143 @@ class ApiService {
 
     if (side == 'all') return transactions;
     return transactions.where((t) => t.side == side).toList();
+  }
+
+  // ── PROFILE ─────────────────────────────────────────────────────────────
+
+  /// GET /api/v1/users/profile
+  Future<UserProfileModel> getProfile() async {
+    final res = await _dio.get('/api/v1/users/profile');
+    return UserProfileModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// PUT /api/v1/users/profile
+  Future<UserProfileModel> updateProfile({required String username, required String email}) async {
+    final res = await _dio.put('/api/v1/users/profile', data: {
+      'username': username,
+      'email': email,
+    });
+    return UserProfileModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  // ── EXCHANGE KEY EDIT ──────────────────────────────────────────────────
+
+  /// PUT /api/v1/exchanges/{id}
+  Future<ExchangeKeyModel> updateExchangeKey(
+    String id, {
+    required String apiKey,
+    required String secretKey,
+    bool canRead = true,
+    bool canTrade = false,
+  }) async {
+    final res = await _dio.put('/api/v1/exchanges/$id', data: {
+      'apiKey': apiKey,
+      'secretKey': secretKey,
+      'canRead': canRead,
+      'canTrade': canTrade,
+    });
+    return ExchangeKeyModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  // ── FAVORITES ──────────────────────────────────────────────────────────
+
+  /// GET /api/v1/favorites
+  Future<Set<String>> getFavorites() async {
+    final res = await _dio.get('/api/v1/favorites');
+    final list = res.data as List<dynamic>;
+    return list.map((e) => (e as Map<String, dynamic>)['symbol'] as String).toSet();
+  }
+
+  /// POST /api/v1/favorites
+  Future<void> addFavorite(String symbol) async {
+    await _dio.post('/api/v1/favorites', data: {'symbol': symbol});
+  }
+
+  /// DELETE /api/v1/favorites/{symbol}
+  Future<void> removeFavorite(String symbol) async {
+    await _dio.delete('/api/v1/favorites/$symbol');
+  }
+
+  // ── NOTIFICATIONS ──────────────────────────────────────────────────────
+
+  /// GET /api/v1/notifications
+  Future<List<NotificationModel>> getNotifications() async {
+    final res = await _dio.get('/api/v1/notifications');
+    final list = res.data as List<dynamic>;
+    return list.map((e) => NotificationModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// POST /api/v1/notifications/{id}/read
+  Future<void> markNotificationRead(String id) async {
+    await _dio.post('/api/v1/notifications/$id/read');
+  }
+
+  /// POST /api/v1/notifications/read-all
+  Future<void> markAllNotificationsRead() async {
+    await _dio.post('/api/v1/notifications/read-all');
+  }
+
+  // ── PRICE ALARMS ───────────────────────────────────────────────────────
+
+  /// GET /api/v1/alarms
+  Future<List<PriceAlarmModel>> getAlarms() async {
+    final res = await _dio.get('/api/v1/alarms');
+    final list = res.data as List<dynamic>;
+    return list.map((e) => PriceAlarmModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// POST /api/v1/alarms
+  Future<PriceAlarmModel> createAlarm({
+    required String symbol,
+    required double targetPrice,
+    required String direction, // "ABOVE" | "BELOW"
+  }) async {
+    final res = await _dio.post('/api/v1/alarms', data: {
+      'symbol': symbol,
+      'targetPrice': targetPrice,
+      'direction': direction,
+    });
+    return PriceAlarmModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// DELETE /api/v1/alarms/{id}
+  Future<void> deleteAlarm(String id) async {
+    await _dio.delete('/api/v1/alarms/$id');
+  }
+
+  // ── PASSWORD RESET ─────────────────────────────────────────────────────
+
+  /// POST /api/v1/auth/forgot-password
+  /// Backend has no email provider wired up yet, so the reset token comes
+  /// back directly in the response — see ForgotPasswordResponse on the backend.
+  Future<String> forgotPassword(String email) async {
+    final res = await _dio.post('/api/v1/auth/forgot-password', data: {'email': email});
+    return res.data['resetToken'] as String;
+  }
+
+  /// POST /api/v1/auth/reset-password
+  Future<void> resetPassword({required String token, required String newPassword}) async {
+    await _dio.post('/api/v1/auth/reset-password', data: {
+      'token': token,
+      'newPassword': newPassword,
+    });
+  }
+
+  // ── 2FA ────────────────────────────────────────────────────────────────
+
+  /// POST /api/v1/auth/2fa/setup — returns {secret, otpAuthUrl}
+  Future<(String secret, String otpAuthUrl)> setup2fa() async {
+    final res = await _dio.post('/api/v1/auth/2fa/setup');
+    return (res.data['secret'] as String, res.data['otpAuthUrl'] as String);
+  }
+
+  /// POST /api/v1/auth/2fa/enable
+  Future<void> enable2fa(String code) async {
+    await _dio.post('/api/v1/auth/2fa/enable', data: {'code': code});
+  }
+
+  /// POST /api/v1/auth/2fa/disable
+  Future<void> disable2fa(String code) async {
+    await _dio.post('/api/v1/auth/2fa/disable', data: {'code': code});
   }
 }

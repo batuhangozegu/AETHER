@@ -56,32 +56,81 @@ class _LoginViewState extends State<_LoginView> {
     try {
       final apiService = ref.read(apiServiceProvider);
       await apiService.login(email, password);
-      // Save email as display name on login (username not available from login response)
-      await ref.read(authUserProvider.notifier).saveUser(
-        username: email.split('@').first,
-        email: email,
-      );
-      ref.read(authStateProvider.notifier).setAuthState(AuthState.app);
-    } catch (e) {
-      String errMsg = 'Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.';
-      if (e is DioException) {
-        if (e.response != null && e.response?.data is String) {
-          errMsg = e.response!.data as String;
-        } else if (e.message != null) {
-          errMsg = e.message!;
+      await _onLoginSuccess(ref, email);
+    } on DioException catch (e) {
+      final errMsg = _extractError(e);
+      if (errMsg.contains('2FA')) {
+        final code = await _prompt2FACode(context);
+        if (code == null || code.isEmpty) {
+          setState(() => _loading = false);
+          return;
         }
+        try {
+          final apiService = ref.read(apiServiceProvider);
+          await apiService.login(email, password, twoFactorCode: code);
+          await _onLoginSuccess(ref, email);
+        } on DioException catch (e2) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(_extractError(e2)), backgroundColor: AppColors.loss),
+            );
+          }
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errMsg), backgroundColor: AppColors.loss),
+        );
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errMsg),
-          backgroundColor: AppColors.loss,
-        ),
-      );
     } finally {
       if (mounted) {
         setState(() => _loading = false);
       }
     }
+  }
+
+  Future<void> _onLoginSuccess(WidgetRef ref, String email) async {
+    // Save email as display name on login (username not available from login response)
+    await ref.read(authUserProvider.notifier).saveUser(
+      username: email.split('@').first,
+      email: email,
+    );
+    ref.read(authStateProvider.notifier).setAuthState(AuthState.app);
+  }
+
+  String _extractError(DioException e) {
+    final data = e.response?.data;
+    if (data is Map && data['error'] != null) return data['error'].toString();
+    if (data is String && data.isNotEmpty) return data;
+    return e.message ?? 'Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.';
+  }
+
+  Future<String?> _prompt2FACode(BuildContext context) async {
+    final ctrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF111828),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.hairline, width: 0.5),
+        ),
+        title: Text('2FA Kodu', style: GoogleFonts.spaceGrotesk(color: AppColors.text1, fontWeight: FontWeight.w600)),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          autofocus: true,
+          style: AppTheme.mono(fontSize: 18, letterSpacing: 4),
+          decoration: const InputDecoration(counterText: '', hintText: '000000'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx),
+              child: Text('İptal', style: GoogleFonts.spaceGrotesk(color: AppColors.text3))),
+          TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: Text('Onayla', style: GoogleFonts.spaceGrotesk(color: AppColors.accent, fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
   }
 
   @override

@@ -1,26 +1,28 @@
 // lib/screens/forgot_password_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../providers/app_providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
-import 'auth_screen.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
   final String initialStage;
   const ForgotPasswordScreen({super.key, this.initialStage = 'email'});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   late String _step = widget.initialStage;
   String _email = '';
-  final List<String> _code = ['', '', '', '', '', ''];
+  String? _resetToken;
   String _pw = '';
   String _pw2 = '';
   bool _s1Visible = false;
   bool _s2Visible = false;
+  bool _submitting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -62,15 +64,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _step == 'email' ? 'Parolanı sıfırla' : _step == 'code' ? 'E-postanı kontrol et' : 'Yeni parola belirle',
+                      _step == 'email' ? 'Parolanı sıfırla' : _step == 'code' ? 'Sıfırlama bağlantısı hazır' : 'Yeni parola belirle',
                       style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.text1, letterSpacing: -0.4),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       _step == 'email'
-                          ? 'Hesabınla eşleşen e-postayı gir; sana 6 haneli kod göndereceğiz.'
+                          ? 'Hesabınla eşleşen e-postayı gir.'
                           : _step == 'code'
-                              ? '$_email adresine gönderilen 6 haneli kodu gir.'
+                              ? 'E-posta gönderimi henüz bağlı değil (geliştirme modu) — sıfırlama tokenın aşağıda, devam edebilirsin.'
                               : 'Yeni parolanı oluştur. Eski parolanla aynı olamaz.',
                       style: GoogleFonts.spaceGrotesk(fontSize: 13, color: AppColors.text3, height: 1.5),
                     ),
@@ -101,9 +103,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 24),
         AuthPrimaryButton(
-          label: 'Kodu Gönder',
-          onPressed: () {
-            if (_email.isNotEmpty) setState(() => _step = 'code');
+          label: _submitting ? 'Gönderiliyor...' : 'Devam Et',
+          onPressed: _submitting ? () {} : () async {
+            if (_email.isEmpty) return;
+            setState(() => _submitting = true);
+            try {
+              final token = await ref.read(apiServiceProvider).forgotPassword(_email);
+              setState(() {
+                _resetToken = token;
+                _step = 'code';
+                _submitting = false;
+              });
+            } catch (e) {
+              setState(() => _submitting = false);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('İstek başarısız: $e'), backgroundColor: AppColors.loss),
+                );
+              }
+            }
           },
         ),
       ],
@@ -114,44 +132,22 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(6, (i) {
-            final c = _code[i];
-            final filled = c.isNotEmpty;
-            return Container(
-              width: 48,
-              height: 48,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: filled ? const Color(0x0F4D9FFF) : const Color(0x09FFFFFF),
-                border: Border.all(color: filled ? const Color(0x804D9FFF) : AppColors.hairline, width: 0.5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                c.isEmpty && i == 0 ? '|' : c,
-                style: GoogleFonts.spaceGrotesk(fontSize: 22, fontWeight: FontWeight.w500, color: AppColors.text1),
-              ),
-            );
-          }),
-        ),
-        const SizedBox(height: 20),
-        Center(
-          child: Text.rich(TextSpan(
-            style: GoogleFonts.spaceGrotesk(fontSize: 12, color: AppColors.text3),
-            children: const [
-              TextSpan(text: 'Kod gelmedi mi? '),
-              TextSpan(text: 'Yeniden gönder (00:42)', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.w600)),
-            ],
-          )),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0x0F4D9FFF),
+            border: Border.all(color: const Color(0x804D9FFF), width: 0.5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            _resetToken ?? '',
+            style: AppTheme.mono(fontSize: 12, color: AppColors.text1),
+          ),
         ),
         const SizedBox(height: 24),
         AuthPrimaryButton(
           label: 'Devam Et',
-          onPressed: () {
-            // For demo, we just go to next step
-            setState(() => _step = 'new');
-          },
+          onPressed: () => setState(() => _step = 'new'),
         ),
       ],
     );
@@ -186,9 +182,31 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 24),
         AuthPrimaryButton(
-          label: 'Parolayı Güncelle',
-          onPressed: () {
-            Navigator.pop(context);
+          label: _submitting ? 'Güncelleniyor...' : 'Parolayı Güncelle',
+          onPressed: _submitting ? () {} : () async {
+            if (_pw.length < 8 || _pw != _pw2 || _resetToken == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Parolalar eşleşmiyor veya çok kısa (en az 8 karakter)')),
+              );
+              return;
+            }
+            setState(() => _submitting = true);
+            try {
+              await ref.read(apiServiceProvider).resetPassword(token: _resetToken!, newPassword: _pw);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Parola güncellendi, giriş yapabilirsin')),
+                );
+                Navigator.pop(context);
+              }
+            } catch (e) {
+              setState(() => _submitting = false);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Parola güncellenemedi: $e'), backgroundColor: AppColors.loss),
+                );
+              }
+            }
           },
         ),
       ],

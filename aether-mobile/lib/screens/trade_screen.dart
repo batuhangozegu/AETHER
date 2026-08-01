@@ -8,6 +8,7 @@ import '../models/order.dart';
 import '../providers/api_keys_provider.dart';
 import '../providers/app_providers.dart';
 import '../providers/trade_provider.dart';
+import '../providers/live_prices_provider.dart';
 import 'dashboard_screen.dart' show realPortfolioProvider;
 import 'history_screen.dart' show transactionsProvider;
 import 'risk_screen.dart' show riskProvider;
@@ -1155,19 +1156,21 @@ class _CoinSelector extends StatelessWidget {
 }
 
 // ── Coin Price Header ──────────────────────────────────────────────────
-/// Selected coin's name, price and 24h delta — updates on coin switch
-class _CoinPriceHeader extends StatelessWidget {
+/// Selected coin's name, price and 24h delta — updates on coin switch,
+/// and reflects the live WebSocket price stream when available.
+class _CoinPriceHeader extends ConsumerWidget {
   final _TradeCoin coin;
   final double entryPrice;
   const _CoinPriceHeader({required this.coin, required this.entryPrice});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // 24h delta lookup (approx from history first vs last point)
     const deltas = {'BTC': 2.84, 'ETH': 1.47, 'SOL': -0.63, 'BNB': 0.92, 'ADA': -1.15};
     final delta = deltas[coin.symbol] ?? 0.0;
     final isUp = delta >= 0;
-    final price = _kCoinBasePrices[coin.symbol] ?? entryPrice;
+    final livePrice = ref.watch(livePricesProvider)[coin.symbol];
+    final price = livePrice ?? _kCoinBasePrices[coin.symbol] ?? entryPrice;
 
     return Row(children: [
       CoinAvatar(symbol: coin.symbol, size: 42),

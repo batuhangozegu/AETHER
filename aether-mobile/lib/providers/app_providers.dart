@@ -4,6 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 
+/// Derives a ws:// (or wss://) URL from the configured HTTP API base URL,
+/// so the WebSocket price stream targets the same host without duplicating it.
+String apiBaseUrlWs(String path) {
+  final wsBase = ApiService.baseUrl
+      .replaceFirst('https://', 'wss://')
+      .replaceFirst('http://', 'ws://');
+  return '$wsBase$path';
+}
+
 /// Global bottom-nav index — 0:Cüzdan 1:İşlem 2:Geçmiş 3:Risk 4:Profil
 final navIndexProvider = StateProvider<int>((_) => 0);
 
