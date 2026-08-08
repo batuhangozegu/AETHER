@@ -29,7 +29,10 @@ public class PriceAlarm {
     @Column(name = "symbol", nullable = false, length = 20)
     private String symbol;
 
-    @Column(name = "target_price", nullable = false)
+    // precision/scale açıkça belirtiliyor — bkz. Order.java'daki aynı
+    // gerekçe (Hibernate varsayılanı numeric(38,2) altcoin fiyatlarını
+    // sessizce yuvarlıyordu).
+    @Column(name = "target_price", nullable = false, precision = 20, scale = 8)
     private BigDecimal targetPrice;
 
     @Column(name = "direction", nullable = false)

@@ -8,6 +8,8 @@ class Transaction {
   final double price;
   final double amount;
   final double total;
+  final String status;   // 'OPEN' | 'CLOSED' | 'CANCELED' | 'TRIGGERED'
+  final double? pnl;      // canlı (OPEN) veya kesinleşmiş (CLOSED) kâr/zarar
 
   const Transaction({
     required this.id,
@@ -18,9 +20,12 @@ class Transaction {
     required this.price,
     required this.amount,
     required this.total,
+    this.status = 'CLOSED',
+    this.pnl,
   });
 
   bool get isBuy => side == 'buy';
+  bool get isOpen => status.toUpperCase() == 'OPEN';
 
   factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
         id: json['id'] as String,
@@ -31,10 +36,13 @@ class Transaction {
         price: (json['price'] as num).toDouble(),
         amount: (json['amount'] as num).toDouble(),
         total: (json['total'] as num).toDouble(),
+        status: (json['status'] as String?) ?? 'CLOSED',
+        pnl: (json['pnl'] as num?)?.toDouble(),
       );
 
-  /// Converts a closed OrderModel into a Transaction for the history screen.
-  /// Backend: { id, symbol, side, amount, entryPrice, exitPrice, currentPnL, createdAt }
+  /// Bir OrderModel'i (açık ya da kapalı) Geçmiş ekranı için Transaction'a
+  /// çevirir. Backend: { id, symbol, side, amount, entryPrice, exitPrice,
+  /// status, currentPnL, createdAt }
   factory Transaction.fromOrder(dynamic order) {
     final createdAt = (order.createdAt as String?) ?? '';
     String date = '';
@@ -58,6 +66,8 @@ class Transaction {
       price:  price,
       amount: amount,
       total:  amount * price,
+      status: (order.status as String?) ?? 'CLOSED',
+      pnl:    order.currentPnL as double?,
     );
   }
 
@@ -70,5 +80,7 @@ class Transaction {
         'price': price,
         'amount': amount,
         'total': total,
+        'status': status,
+        if (pnl != null) 'pnl': pnl,
       };
 }

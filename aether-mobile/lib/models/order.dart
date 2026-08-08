@@ -1,7 +1,10 @@
 // lib/models/order.dart
 //
-// Backend OrderResponse: { id, symbol, side, amount, status, currentPnL, createdAt, closedAt }
+// Backend OrderResponse: { id, symbol, side, amount, status, currentPnL,
+//   createdAt, closedAt, exchangeOrderId, marketType, leverage, marginMode,
+//   liquidationPrice }
 // Backend enums: TradeSide { BUY, SELL } — OrderStatus { OPEN, CLOSED, CANCELED, TRIGGERED }
+//   MarketType { SPOT, FUTURES } — MarginMode { ISOLATED, CROSS }
 
 class OrderModel {
   final String id;           // UUID string
@@ -16,6 +19,10 @@ class OrderModel {
   final double? currentPnL;  // nullable — backend live calculates
   final String? createdAt;
   final String? closedAt;
+  final String marketType;   // "SPOT" | "FUTURES"
+  final int? leverage;       // sadece FUTURES
+  final String? marginMode;  // "ISOLATED" | "CROSS" — sadece FUTURES
+  final double? liquidationPrice; // borsanın hesapladığı likidasyon fiyatı
 
   const OrderModel({
     required this.id,
@@ -30,11 +37,16 @@ class OrderModel {
     this.currentPnL,
     this.createdAt,
     this.closedAt,
+    this.marketType = 'SPOT',
+    this.leverage,
+    this.marginMode,
+    this.liquidationPrice,
   });
 
   bool get isBuy => side.toUpperCase() == 'BUY';
   bool get isOpen => status.toUpperCase() == 'OPEN';
   bool get isProfit => (currentPnL ?? 0) >= 0;
+  bool get isFutures => marketType.toUpperCase() == 'FUTURES';
 
   factory OrderModel.fromJson(Map<String, dynamic> json) => OrderModel(
         id: (json['id'] as String?) ?? '',
@@ -49,6 +61,10 @@ class OrderModel {
         currentPnL: (json['currentPnL'] as num?)?.toDouble(),
         createdAt: (json['createdAt'] as String?),
         closedAt: (json['closedAt'] as String?),
+        marketType: (json['marketType'] as String?) ?? 'SPOT',
+        leverage: (json['leverage'] as num?)?.toInt(),
+        marginMode: (json['marginMode'] as String?),
+        liquidationPrice: (json['liquidationPrice'] as num?)?.toDouble(),
       );
 }
 
@@ -62,6 +78,9 @@ class CreateOrderPayload {
   final double entryPrice;
   final double? stopLoss;
   final double? takeProfit;
+  final String marketType; // "SPOT" | "FUTURES"
+  final int? leverage;     // sadece FUTURES (1-125)
+  final String? marginMode; // "ISOLATED" | "CROSS" — sadece FUTURES
 
   const CreateOrderPayload({
     required this.exchangeKeyId,
@@ -72,6 +91,9 @@ class CreateOrderPayload {
     required this.entryPrice,
     this.stopLoss,
     this.takeProfit,
+    this.marketType = 'SPOT',
+    this.leverage,
+    this.marginMode,
   });
 
   Map<String, dynamic> toJson() => {
@@ -83,6 +105,9 @@ class CreateOrderPayload {
         'entryPrice': entryPrice,
         if (stopLoss != null) 'stopLoss': stopLoss,
         if (takeProfit != null) 'takeProfit': takeProfit,
+        'marketType': marketType,
+        if (leverage != null) 'leverage': leverage,
+        if (marginMode != null) 'marginMode': marginMode,
       };
 }
 

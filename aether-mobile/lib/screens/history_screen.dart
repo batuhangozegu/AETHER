@@ -10,7 +10,8 @@ import '../utils/formatters.dart';
 import '../widgets/coin_avatar.dart';
 
 // ── Provider ───────────────────────────────────────────────────────────
-/// GET /api/v1/trades/history → kapanmış emirleri Transaction'a dönüştürür.
+/// GET /api/v1/trades/history → hem açık hem kapalı emirleri
+/// Transaction'a dönüştürür; durumu `status`/`isOpen` ile ayırt edilir.
 final transactionsProvider = FutureProvider<List<Transaction>>((ref) async {
   try {
     return await ref.watch(apiServiceProvider).getTransactions();
@@ -434,6 +435,23 @@ class _TxRow extends StatelessWidget {
                                 letterSpacing: 0.04,
                               ),
                             ),
+                            if (tx.isOpen) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accentSoft,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text('AÇIK',
+                                    style: GoogleFonts.spaceGrotesk(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.accent,
+                                        letterSpacing: 0.04)),
+                              ),
+                            ],
                             const SizedBox(width: 6),
                             Text(tx.symbol,
                                 style: GoogleFonts.spaceGrotesk(
@@ -456,13 +474,25 @@ class _TxRow extends StatelessWidget {
                                   fontSize: 12, color: AppColors.text2),
                             ),
                             const Spacer(),
-                            Text(
-                              '${tx.isBuy ? '−' : '+'}${Formatters.money(tx.total)}',
-                              style: AppTheme.mono(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
+                            if (tx.pnl != null)
+                              Text(
+                                '${tx.pnl! >= 0 ? '+' : ''}${Formatters.money(tx.pnl!)}',
+                                style: AppTheme.mono(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: tx.pnl! >= 0
+                                      ? AppColors.profit
+                                      : AppColors.loss,
+                                ),
+                              )
+                            else
+                              Text(
+                                '${tx.isBuy ? '−' : '+'}${Formatters.money(tx.total)}',
+                                style: AppTheme.mono(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ],

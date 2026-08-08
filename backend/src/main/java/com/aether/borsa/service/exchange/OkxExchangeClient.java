@@ -1,6 +1,8 @@
 package com.aether.borsa.service.exchange;
 
 import com.aether.borsa.dto.response.CandleResponse;
+import com.aether.borsa.model.enums.MarginMode;
+import com.aether.borsa.model.enums.TradeSide;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -150,6 +152,182 @@ public class OkxExchangeClient implements IExchangeClient {
         } catch (Exception e) {
             throw new RuntimeException("OKX mum verisi alınamadı: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public PlacedOrder placeSpotOrder(String apiKey, String secretKey, String passphrase,
+                                       String symbol, TradeSide side, String type,
+                                       BigDecimal amount, BigDecimal limitPrice) {
+        try {
+            String ordType = "MARKET".equalsIgnoreCase(type) ? "market"
+                    : "LIMIT".equalsIgnoreCase(type) ? "limit"
+                    : null;
+            if (ordType == null) {
+                throw new RuntimeException("Desteklenmeyen emir tipi: " + type);
+            }
+            if ("limit".equals(ordType) && limitPrice == null) {
+                throw new RuntimeException("Limit emir için fiyat gerekli.");
+            }
+
+            StringBuilder body = new StringBuilder("{")
+                    .append("\"instId\":\"").append(toInstId(symbol)).append("\",")
+                    .append("\"tdMode\":\"cash\",")
+                    .append("\"side\":\"").append(side == TradeSide.BUY ? "buy" : "sell").append("\",")
+                    .append("\"ordType\":\"").append(ordType).append("\",")
+                    // sz'nin her zaman baz para birimi miktarı olması için
+                    // (market alım emirlerinde OKX varsayılanı quote-currency'dir).
+                    .append("\"tgtCcy\":\"base_ccy\",")
+                    .append("\"sz\":\"").append(amount.toPlainString()).append("\"");
+            if (limitPrice != null) {
+                body.append(",\"px\":\"").append(limitPrice.toPlainString()).append("\"");
+            }
+            body.append("}");
+
+            JsonNode root = postSigned("/api/v5/trade/order", body.toString(), apiKey, secretKey, passphrase);
+            String exchangeOrderId = root.path("data").get(0).path("ordId").asText();
+            BigDecimal fillPrice = limitPrice != null ? limitPrice : getCurrentPrice(symbol);
+
+            return new PlacedOrder(exchangeOrderId, fillPrice, amount, "SUBMITTED");
+        } catch (Exception e) {
+            throw new RuntimeException("OKX emri gönderilemedi: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void cancelSpotOrder(String apiKey, String secretKey, String passphrase,
+                                 String symbol, String exchangeOrderId) {
+        try {
+            String body = "{\"instId\":\"" + toInstId(symbol) + "\",\"ordId\":\"" + exchangeOrderId + "\"}";
+            postSigned("/api/v5/trade/cancel-order", body, apiKey, secretKey, passphrase);
+        } catch (Exception e) {
+            throw new RuntimeException("OKX emri iptal edilemedi: " + e.getMessage(), e);
+        }
+    }
+
+    private JsonNode postSigned(String requestPath, String body, String apiKey, String secretKey, String passphrase) throws Exception {
+        String timestamp = Instant.now().toString();
+        String sign = sign(timestamp, "POST", requestPath, body, secretKey);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("OK-ACCESS-KEY", apiKey);
+        headers.set("OK-ACCESS-SIGN", sign);
+        headers.set("OK-ACCESS-TIMESTAMP", timestamp);
+        headers.set("OK-ACCESS-PASSPHRASE", passphrase == null ? "" : passphrase);
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        if (useSandbox) {
+            headers.set("x-simulated-trading", "1");
+        }
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                BASE_URL + requestPath, HttpMethod.POST, new HttpEntity<>(body, headers), String.class);
+
+        JsonNode root = objectMapper.readTree(response.getBody());
+        checkCode(root);
+        return root;
+    }
+
+    @Override
+    public void setLeverage(String apiKey, String secretKey, String passphrase,
+                             String symbol, int leverage, MarginMode marginMode) {
+        try {
+            String mgnMode = marginMode == MarginMode.ISOLATED ? "isolated" : "cross";
+            String body = "{\"instId\":\"" + toSwapInstId(symbol) + "\",\"lever\":\"" + leverage
+                    + "\",\"mgnMode\":\"" + mgnMode + "\"}";
+            postSigned("/api/v5/account/set-leverage", body, apiKey, secretKey, passphrase);
+        } catch (Exception e) {
+            throw new RuntimeException("OKX kaldıraç ayarlanamadı: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public PlacedOrder placeFuturesOrder(String apiKey, String secretKey, String passphrase,
+                                          String symbol, TradeSide side, String type,
+                                          BigDecimal amount, BigDecimal limitPrice, boolean reduceOnly) {
+        try {
+            String ordType = "MARKET".equalsIgnoreCase(type) ? "market"
+                    : "LIMIT".equalsIgnoreCase(type) ? "limit"
+                    : null;
+            if (ordType == null) {
+                throw new RuntimeException("Desteklenmeyen emir tipi: " + type);
+            }
+            if ("limit".equals(ordType) && limitPrice == null) {
+                throw new RuntimeException("Limit emir için fiyat gerekli.");
+            }
+
+            StringBuilder body = new StringBuilder("{")
+                    .append("\"instId\":\"").append(toSwapInstId(symbol)).append("\",")
+                    .append("\"tdMode\":\"cross\",")
+                    .append("\"side\":\"").append(side == TradeSide.BUY ? "buy" : "sell").append("\",")
+                    .append("\"ordType\":\"").append(ordType).append("\",")
+                    .append("\"sz\":\"").append(amount.toPlainString()).append("\",")
+                    .append("\"reduceOnly\":").append(reduceOnly);
+            if (limitPrice != null) {
+                body.append(",\"px\":\"").append(limitPrice.toPlainString()).append("\"");
+            }
+            body.append("}");
+
+            JsonNode root = postSigned("/api/v5/trade/order", body.toString(), apiKey, secretKey, passphrase);
+            String exchangeOrderId = root.path("data").get(0).path("ordId").asText();
+            BigDecimal fillPrice = limitPrice != null ? limitPrice : getCurrentPrice(symbol);
+
+            return new PlacedOrder(exchangeOrderId, fillPrice, amount, "SUBMITTED");
+        } catch (Exception e) {
+            throw new RuntimeException("OKX futures emri gönderilemedi: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public PositionInfo getPositionInfo(String apiKey, String secretKey, String passphrase, String symbol) {
+        try {
+            String instId = toSwapInstId(symbol);
+            String requestPath = "/api/v5/account/positions?instId=" + instId;
+            String timestamp = Instant.now().toString();
+            String sign = sign(timestamp, "GET", requestPath, "", secretKey);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("OK-ACCESS-KEY", apiKey);
+            headers.set("OK-ACCESS-SIGN", sign);
+            headers.set("OK-ACCESS-TIMESTAMP", timestamp);
+            headers.set("OK-ACCESS-PASSPHRASE", passphrase == null ? "" : passphrase);
+            if (useSandbox) {
+                headers.set("x-simulated-trading", "1");
+            }
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                    BASE_URL + requestPath, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+
+            JsonNode root = objectMapper.readTree(response.getBody());
+            checkCode(root);
+
+            JsonNode data = root.path("data");
+            JsonNode position = data.isArray() && !data.isEmpty() ? data.get(0) : null;
+            if (position == null) {
+                return new PositionInfo(BigDecimal.ZERO, getCurrentPrice(symbol), BigDecimal.ZERO);
+            }
+
+            BigDecimal liquidationPrice = parseOrZero(position.path("liqPx").asText("0"));
+            BigDecimal markPrice = parseOrZero(position.path("markPx").asText("0"));
+            BigDecimal positionAmt = parseOrZero(position.path("pos").asText("0"));
+
+            return new PositionInfo(liquidationPrice, markPrice, positionAmt);
+        } catch (Exception e) {
+            throw new RuntimeException("OKX pozisyon bilgisi alınamadı: " + e.getMessage(), e);
+        }
+    }
+
+    private BigDecimal parseOrZero(String text) {
+        if (text == null || text.isBlank()) {
+            return BigDecimal.ZERO;
+        }
+        return new BigDecimal(text);
+    }
+
+    /** OKX perpetual swap instId formatı, ör. BTC-USDT-SWAP. */
+    private String toSwapInstId(String symbol) {
+        if (symbol.endsWith("-SWAP")) {
+            return symbol;
+        }
+        return toInstId(symbol) + "-SWAP";
     }
 
     private String toInstId(String symbol) {

@@ -6,6 +6,7 @@ import '../models/market.dart';
 import '../providers/api_keys_provider.dart';
 import '../providers/app_providers.dart';
 import '../providers/live_prices_provider.dart';
+import '../providers/market_providers.dart';
 import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -14,28 +15,6 @@ import '../widgets/coin_avatar.dart';
 import '../widgets/delta_pill.dart';
 import '../widgets/sparkline_chart.dart';
 import 'trade_screen.dart';
-
-/// Coin sembolünden deterministik ama görsel olarak farklı sparkline üretir.
-/// Yalnızca gerçek mum verisi yüklenene kadar (veya başarısız olursa) yer
-/// tutucu olarak kullanılır — gerçek fiyat hareketini yansıtmaz.
-List<double> _sparklineFallback(String symbol, double price, bool isUp) {
-  // symbol karakterlerinin ASCII toplamını seed olarak kullan
-  final seed = symbol.codeUnits.fold(0, (a, b) => a + b);
-  // 7 adımlık faktör serisi — her coin için benzersiz bir desen
-  final offsets = List.generate(7, (i) {
-    final v = ((seed * (i + 3)) % 17) / 100.0; // 0..0.17 aralığı
-    return (i % 2 == 0) ? -v : v;
-  });
-  // Son değeri gerçek fiyat yap, diğerlerini ona göre hesapla
-  final result = <double>[];
-  double cur = price * (isUp ? 0.94 : 1.06);
-  for (final off in offsets) {
-    cur = cur + price * off;
-    result.add(cur);
-  }
-  result.add(price); // son nokta her zaman gerçek fiyat
-  return result;
-}
 
 // ── Static coin metadata (name + rank) ──────────────────────────────────
 const _kCoinMeta = {
@@ -50,16 +29,8 @@ const _kCoinMeta = {
 };
 
 // ── Provider ────────────────────────────────────────────────────────────
-final marketCoinsProvider = FutureProvider<List<CoinData>>((ref) async {
-  final apiService = ref.watch(apiServiceProvider);
-  final keys = ref.watch(apiKeysProvider).valueOrNull ?? [];
-  if (keys.isEmpty) return [];
-  try {
-    return await apiService.getMarketCoins(keys.first.id);
-  } catch (_) {
-    return [];
-  }
-});
+// marketCoinsProvider artık lib/providers/market_providers.dart içinde —
+// trade_screen.dart ile paylaşılabilmesi için oradan import ediliyor.
 
 /// Backend candle history'sinden gerçek kapanış fiyatlarını döner.
 /// Borsa bağlantısı yoksa veya istek başarısız olursa boş liste döner —
@@ -297,12 +268,21 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> {
                         DeltaPill(value: m.priceChangePercent),
                       ]),
                       const SizedBox(width: 10),
-                      SparklineChart(
-                        points: (sparkPoints != null && sparkPoints.isNotEmpty)
-                            ? sparkPoints
-                            : _sparklineFallback(m.symbol, m.price, m.isUp),
-                        color: m.isUp ? AppColors.profit : AppColors.loss,
-                        width: 48, height: 22),
+                      (sparkPoints != null && sparkPoints.isNotEmpty)
+                          ? SparklineChart(
+                              points: sparkPoints,
+                              color: m.isUp ? AppColors.profit : AppColors.loss,
+                              width: 48, height: 22)
+                          : const SizedBox(
+                              width: 48, height: 22,
+                              child: Center(
+                                child: SizedBox(
+                                  width: 12, height: 12,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 1.6, color: AppColors.text3),
+                                ),
+                              ),
+                            ),
                     ]),
                   ),
                 );
@@ -328,7 +308,8 @@ class CoinDetailScreen extends ConsumerStatefulWidget {
 class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
   int _rangeIdx = 1;
   final _ranges = ['1m', '5m', '15m', '1h', '4h', '1d'];
-  final _rangeLabels = ['1D', '5D', '15D', '1S', '4S', '1G'];
+  // 'Dk' = dakika (önceden 'D' idi, "gün" ile karışabiliyordu).
+  final _rangeLabels = ['1Dk', '5Dk', '15Dk', '1S', '4S', '1G'];
 
   @override
   Widget build(BuildContext context) {
@@ -346,12 +327,6 @@ class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
               interval: _ranges[_rangeIdx],
             )))
             .valueOrNull;
-    final chartPoints = (candlePoints != null && candlePoints.isNotEmpty)
-        ? candlePoints
-        : [
-            m.price * 0.94, m.price * 0.96, m.price * 0.95, m.price * 0.97,
-            m.price * 0.98, m.price * 0.97, m.price * 0.99, m.price,
-          ];
 
     return Scaffold(
       backgroundColor: AppColors.bg0,
@@ -397,13 +372,19 @@ class _CoinDetailState extends ConsumerState<CoinDetailScreen> {
               ])),
             ]),
             const SizedBox(height: 14),
-            // Mini price chart (static sparkline while candle data loads)
-            Container(height: 140, child: CustomPaint(
-              size: const Size(double.infinity, 140),
-              painter: _AreaChartPainter(
-                points: chartPoints,
-                color: AppColors.accent),
-            )),
+            // Mini price chart — gerçek mum verisi (candlePoints) gelene
+            // kadar sahte veri değil, spinner gösterilir.
+            Container(
+              height: 140,
+              child: (candlePoints != null && candlePoints.isNotEmpty)
+                  ? CustomPaint(
+                      size: const Size(double.infinity, 140),
+                      painter: _AreaChartPainter(
+                          points: candlePoints, color: AppColors.accent),
+                    )
+                  : const Center(
+                      child: CircularProgressIndicator(color: AppColors.accent)),
+            ),
             const SizedBox(height: 12),
             // Time range
             Row(children: List.generate(_rangeLabels.length, (i) => Expanded(child: GestureDetector(

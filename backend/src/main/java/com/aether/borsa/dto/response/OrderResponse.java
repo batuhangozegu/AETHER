@@ -1,5 +1,7 @@
 package com.aether.borsa.dto.response;
 
+import com.aether.borsa.model.enums.MarginMode;
+import com.aether.borsa.model.enums.MarketType;
 import com.aether.borsa.model.enums.OrderStatus;
 import com.aether.borsa.model.enums.TradeSide;
 import lombok.AllArgsConstructor;
@@ -25,5 +27,10 @@ public class OrderResponse {
     private BigDecimal currentPnL;
     private LocalDateTime createdAt;
     private LocalDateTime closedAt;
+    private String exchangeOrderId;
+    private MarketType marketType;
+    private Integer leverage;
+    private MarginMode marginMode;
+    private BigDecimal liquidationPrice;
 
 }

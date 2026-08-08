@@ -2,6 +2,7 @@ package com.aether.borsa.model.entity;
 
 import com.aether.borsa.model.enums.ExchangeName;
 import jakarta.persistence.*;
+import jakarta.persistence.EnumType;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -25,7 +26,8 @@ public class ExchangeKey {
     @JoinColumn(name = "user_id")
     private User user;
 
-    @Column(name = "exchange_name")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "exchange_name", nullable = false)
     private ExchangeName exchangeName;
 
     @Column(name= "encrypted_api_key")
@@ -43,7 +45,7 @@ public class ExchangeKey {
     @Column(name = "can_read")
     private boolean canRead;
 
-    @Column(name = "canTrade")
+    @Column(name = "can_trade")
     private boolean canTrade;
 
     @Column(name = "created_at",nullable = false,updatable = false)

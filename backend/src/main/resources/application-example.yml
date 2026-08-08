@@ -45,3 +45,5 @@ exchange:
     use-testnet: true
   okx:
     use-sandbox: true
+  bingx:
+    use-sandbox: true

@@ -4,6 +4,6 @@ import java.util.List;
 
 public class SupportedCoins {
     public static final List<String> SYMBOLS = List.of(
-            "BTC", "ETH", "BNB", "SOL", "XRP"
+            "BTC", "ETH", "BNB", "SOL", "XRP", "ADA"
     );
 }

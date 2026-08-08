@@ -1,5 +1,7 @@
 package com.aether.borsa.dto.request;
 
+import com.aether.borsa.model.enums.MarginMode;
+import com.aether.borsa.model.enums.MarketType;
 import com.aether.borsa.model.enums.TradeSide;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -32,5 +34,14 @@ public class CreateOrderRequest {
     private BigDecimal stopLoss;
 
     private BigDecimal takeProfit;
+
+    /** Belirtilmezse SPOT varsayılır (geriye dönük uyumluluk). */
+    private MarketType marketType;
+
+    /** Sadece marketType=FUTURES için: 1-125 arası kaldıraç. */
+    private Integer leverage;
+
+    /** Sadece marketType=FUTURES için; belirtilmezse ISOLATED varsayılır. */
+    private MarginMode marginMode;
 
 }
