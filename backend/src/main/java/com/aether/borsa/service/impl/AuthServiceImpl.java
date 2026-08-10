@@ -72,7 +72,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         String token = jwtTokenProvider.generateToken(user.getId());
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), request.isRememberMe());
         return new TokenResponse(token, refreshToken, "Bearer", jwtTokenProvider.getExpiration());
     }
 
@@ -85,8 +85,13 @@ public class AuthServiceImpl implements AuthService {
         UUID userId = UUID.fromString(jwtTokenProvider.getUserIdFromJWT(refreshToken));
         userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found."));
 
+        // "Oturumu açık tut" ile açılan bir oturumsa, her yenilemede aynı uzun
+        // süreyi yeniden vererek rolling bir pencere oluşturuyoruz — aksi halde
+        // ilk yenilemede sessizce 7 güne düşerdi.
+        boolean rememberMe = jwtTokenProvider.isRememberMeToken(refreshToken);
+
         String newToken = jwtTokenProvider.generateToken(userId);
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId, rememberMe);
         return new TokenResponse(newToken, newRefreshToken, "Bearer", jwtTokenProvider.getExpiration());
     }
 

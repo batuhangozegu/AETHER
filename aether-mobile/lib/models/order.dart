@@ -7,21 +7,21 @@
 //   MarketType { SPOT, FUTURES } — MarginMode { ISOLATED, CROSS }
 
 class OrderModel {
-  final String id;           // UUID string
-  final String symbol;       // e.g. "BTCUSDT"
-  final String side;         // "BUY" | "SELL"
+  final String id; // UUID string
+  final String symbol; // e.g. "BTCUSDT"
+  final String side; // "BUY" | "SELL"
   final double amount;
-  final double? entryPrice;  // entry price
-  final double? exitPrice;   // exit price (set when closed)
+  final double? entryPrice; // entry price
+  final double? exitPrice; // exit price (set when closed)
   final double? takeProfit;
   final double? stopLoss;
-  final String status;       // "OPEN" | "CLOSED" | "CANCELED" | "TRIGGERED"
-  final double? currentPnL;  // nullable — backend live calculates
+  final String status; // "OPEN" | "CLOSED" | "CANCELED" | "TRIGGERED"
+  final double? currentPnL; // nullable — backend live calculates
   final String? createdAt;
   final String? closedAt;
-  final String marketType;   // "SPOT" | "FUTURES"
-  final int? leverage;       // sadece FUTURES
-  final String? marginMode;  // "ISOLATED" | "CROSS" — sadece FUTURES
+  final String marketType; // "SPOT" | "FUTURES"
+  final int? leverage; // sadece FUTURES
+  final String? marginMode; // "ISOLATED" | "CROSS" — sadece FUTURES
   final double? liquidationPrice; // borsanın hesapladığı likidasyon fiyatı
 
   const OrderModel({
@@ -48,6 +48,23 @@ class OrderModel {
   bool get isProfit => (currentPnL ?? 0) >= 0;
   bool get isFutures => marketType.toUpperCase() == 'FUTURES';
 
+  /// Kâr/zararı, gerçekte yatırılan sermayeye (ROI) oranlar: spot'ta bu
+  /// pozisyonun tam notional değeri, futures'ta ise (kaldıraç sayesinde)
+  /// sadece kilitlenen izole marj. Bu yüzden aynı $ kâr, kaldıraçlı bir
+  /// işlemde çok daha yüksek bir % olarak görünür — borsaların "ROI"
+  /// göstergesiyle aynı mantık.
+  double? get pnlPercent {
+    if (currentPnL == null ||
+        entryPrice == null ||
+        entryPrice == 0 ||
+        amount == 0) return null;
+    final notional = entryPrice! * amount;
+    final costBasis =
+        isFutures && (leverage ?? 1) > 1 ? notional / leverage! : notional;
+    if (costBasis == 0) return null;
+    return (currentPnL! / costBasis) * 100;
+  }
+
   factory OrderModel.fromJson(Map<String, dynamic> json) => OrderModel(
         id: (json['id'] as String?) ?? '',
         symbol: (json['symbol'] as String?) ?? '',
@@ -72,14 +89,14 @@ class OrderModel {
 class CreateOrderPayload {
   final String exchangeKeyId;
   final String symbol;
-  final String side;   // "BUY" | "SELL"
-  final String type;   // "LIMIT" | "MARKET"
+  final String side; // "BUY" | "SELL"
+  final String type; // "LIMIT" | "MARKET"
   final double amount;
   final double entryPrice;
   final double? stopLoss;
   final double? takeProfit;
   final String marketType; // "SPOT" | "FUTURES"
-  final int? leverage;     // sadece FUTURES (1-125)
+  final int? leverage; // sadece FUTURES (1-125)
   final String? marginMode; // "ISOLATED" | "CROSS" — sadece FUTURES
 
   const CreateOrderPayload({

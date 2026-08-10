@@ -126,16 +126,16 @@ gradlew.bat
 # Spring Boot uygulama ayarları (gizli bilgiler!)
 **/src/main/resources/application-local.properties
 **/src/main/resources/application-local.yml
-**/src/main/resources/application-prod.properties
-**/src/main/resources/application-prod.yml
+# application-prod.yml commit edilebilir (içinde sır yok, env var okur)
 **/src/main/resources/application-secret.properties
 **/src/main/resources/application-secret.yml
 
-# Ortam değişkenleri
+# Ortam değişkenleri (.env.example commit edilebilir, gerisi edilemez)
 .env
 .env.local
 .env.production
 .env.*
+!.env.example
 
 # ──────────────────────────────────────────────────────
 # IDE & EDITOR

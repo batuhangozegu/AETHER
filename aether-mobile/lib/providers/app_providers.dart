@@ -31,6 +31,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _checkAuth();
   }
 
+  /// Uygulama arka plandan öne geldiğinde ya da manuel olarak tekrar
+  /// çağrılabilir — sadece constructor'da bir kere kontrol etmek yerine.
+  Future<void> recheckAuth() => _checkAuth();
+
   Future<void> _checkAuth() async {
     final authenticated = await _apiService.isAuthenticated();
     if (authenticated) {
@@ -59,5 +63,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
 final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final apiService = ref.watch(apiServiceProvider);
-  return AuthNotifier(apiService);
+  final notifier = AuthNotifier(apiService);
+  // Refresh token da geçersiz/eksik olup interceptor oturumu temizlediğinde
+  // uygulamayı gerçekten login ekranına düşür — aksi halde "app" state'inde
+  // takılı kalıp her istekte sessizce 401 almaya devam ediyordu.
+  apiService.onSessionExpired = () => notifier.setAuthState(AuthState.auth);
+  return notifier;
 });

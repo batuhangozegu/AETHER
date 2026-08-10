@@ -5,6 +5,7 @@
 //   Geliştirme : http://192.168.68.242:8080  (veya --dart-define=API_BASE_URL=...)
 //   Üretim     : https://api.aether.app
 
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/asset.dart';
@@ -29,6 +30,13 @@ class ApiService {
   static const String baseUrl = _baseUrl;
 
   late final Dio _dio;
+
+  /// Interceptor 401 aldıktan sonra refresh de başarısız olursa (refresh
+  /// token yok/geçersiz) çağrılır — UI katmanı bunu dinleyip kullanıcıyı
+  /// login ekranına düşürebilsin diye. Bu olmadan oturum arka planda
+  /// sessizce ölüyor ama uygulama "app" state'inde kalıp her ekranda boş
+  /// veri göstermeye devam ediyordu.
+  void Function()? onSessionExpired;
 
   ApiService() {
     _dio = Dio(BaseOptions(
@@ -85,9 +93,11 @@ class ApiService {
             } catch (_) {
               await prefs.remove('jwt_token');
               await prefs.remove('refresh_token');
+              onSessionExpired?.call();
             }
           } else {
             await prefs.remove('jwt_token');
+            onSessionExpired?.call();
           }
         }
         handler.next(error);
@@ -101,17 +111,20 @@ class ApiService {
   /// [twoFactorCode] only needs to be passed when the account has 2FA enabled;
   /// if omitted and the account requires it, the backend responds with an
   /// error containing "2FA code required." so the caller can prompt for it.
-  Future<String> login(String email, String password, {String? twoFactorCode}) async {
+  Future<String> login(String email, String password,
+      {String? twoFactorCode, bool rememberMe = false}) async {
     final res = await _dio.post('/api/v1/auth/login', data: {
       'email': email,
       'password': password,
       if (twoFactorCode != null && twoFactorCode.isNotEmpty) 'twoFactorCode': twoFactorCode,
+      'rememberMe': rememberMe,
     });
     final token = res.data['accessToken'] as String;
     final refreshToken = res.data['refreshToken'] as String?;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('jwt_token', token);
     if (refreshToken != null) await prefs.setString('refresh_token', refreshToken);
+    await prefs.setBool('remember_me', rememberMe);
     return token;
   }
 
@@ -135,12 +148,73 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('jwt_token');
     await prefs.remove('refresh_token');
+    await prefs.remove('remember_me');
   }
 
+  /// Sadece token'ın var olup olmadığına değil, süresinin dolup dolmadığına
+  /// da bakar. Access token süresi dolmuşsa ama refresh token hâlâ
+  /// geçerliyse burada sessizce yenilemeyi dener — aksi halde uygulama
+  /// süresi dolmuş bir token'la "girişliymiş" gibi açılıp her istekte
+  /// arka planda başarısız oluyor, kullanıcı bunu boş ekran/sıfır bakiye
+  /// olarak görüyordu.
   Future<bool> isAuthenticated() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
-    return token != null && token.isNotEmpty;
+    if (token == null || token.isEmpty) return false;
+    if (!_isJwtExpired(token)) return true;
+
+    final refreshToken = prefs.getString('refresh_token');
+    if (refreshToken == null || _isJwtExpired(refreshToken)) {
+      await prefs.remove('jwt_token');
+      await prefs.remove('refresh_token');
+      return false;
+    }
+
+    try {
+      final res = await Dio(BaseOptions(baseUrl: _baseUrl)).post(
+        '/api/v1/auth/refresh',
+        data: {'refreshToken': refreshToken},
+      );
+      final newToken = res.data['accessToken'] as String;
+      final newRefreshToken = res.data['refreshToken'] as String?;
+      await prefs.setString('jwt_token', newToken);
+      if (newRefreshToken != null) await prefs.setString('refresh_token', newRefreshToken);
+      return true;
+    } catch (_) {
+      await prefs.remove('jwt_token');
+      await prefs.remove('refresh_token');
+      return false;
+    }
+  }
+
+  /// Bir cihazda daha önce "Oturumu açık tut" ile girilmiş, hâlâ geçerli
+  /// bir refresh token'ı olup olmadığını söyler — Face ID/parmak izi
+  /// butonunun gösterilip gösterilmeyeceğine bunun üzerinden karar verilir.
+  Future<bool> hasRememberedSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rememberMe = prefs.getBool('remember_me') ?? false;
+    if (!rememberMe) return false;
+    final refreshToken = prefs.getString('refresh_token');
+    return refreshToken != null && !_isJwtExpired(refreshToken);
+  }
+
+  /// JWT'nin `exp` claim'ini yerelde çözüp süresinin dolup dolmadığına
+  /// bakar — sunucuya gitmeden hızlı bir ön kontrol. 30 saniyelik pay,
+  /// isteğin ağda geçireceği süre yüzünden sınırda başarısız olmasını
+  /// önlemek için.
+  bool _isJwtExpired(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+      final normalized = base64Url.normalize(parts[1]);
+      final payload = json.decode(utf8.decode(base64Url.decode(normalized))) as Map<String, dynamic>;
+      final exp = payload['exp'] as int?;
+      if (exp == null) return true;
+      final expiry = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      return DateTime.now().isAfter(expiry.subtract(const Duration(seconds: 30)));
+    } catch (_) {
+      return true;
+    }
   }
 
   // ── EXCHANGE KEYS ──────────────────────────────────────────────────────

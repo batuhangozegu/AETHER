@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Prodüksiyon profili – tüm hassas değerler environment variable'dan gelir.
+# Bu dosyayı Git'e commit etmek güvenlidir.
+# ─────────────────────────────────────────────────────────────────────────────
+spring:
+  application:
+    name: borsa
+
+  redis:
+    host: ${SPRING_REDIS_HOST:localhost}
+    port: ${SPRING_REDIS_PORT:6379}
+    password: ${SPRING_REDIS_PASSWORD:}
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/borsa_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate        # Prodüksiyonda Flyway yönetir; auto-create kapalı
+    show-sql: false             # Log kirliliğini önle
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+
+server:
+  port: 8080
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:86400000}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+  remember-me-refresh-expiration: ${JWT_REMEMBER_ME_REFRESH_EXPIRATION:2592000000}
+
+encryption:
+  secret-key: ${ENCRYPTION_SECRET_KEY}
+
+exchange:
+  binance:
+    use-sandbox: false
+  bybit:
+    use-testnet: false
+  okx:
+    use-sandbox: false
+  bingx:
+    use-sandbox: false

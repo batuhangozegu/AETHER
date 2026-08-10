@@ -18,17 +18,18 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/coin_avatar.dart';
+import '../widgets/trade_detail_sheet.dart';
 import '../widgets/delta_pill.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/trade_dialogs.dart';
 
 // ── Available coins for trading ────────────────────────────────────────
 const _kTradeCoins = [
-  _TradeCoin('BTC', 'Bitcoin',  'BTCUSDT'),
+  _TradeCoin('BTC', 'Bitcoin', 'BTCUSDT'),
   _TradeCoin('ETH', 'Ethereum', 'ETHUSDT'),
-  _TradeCoin('SOL', 'Solana',   'SOLUSDT'),
-  _TradeCoin('BNB', 'BNB',      'BNBUSDT'),
-  _TradeCoin('ADA', 'Cardano',  'ADAUSDT'),
+  _TradeCoin('SOL', 'Solana', 'SOLUSDT'),
+  _TradeCoin('BNB', 'BNB', 'BNBUSDT'),
+  _TradeCoin('ADA', 'Cardano', 'ADAUSDT'),
 ];
 
 class _TradeCoin {
@@ -57,7 +58,7 @@ const _kCoinBasePrices = {
 final timeRangeProvider = StateProvider<String>((_) => '24S');
 
 const _kRangeToInterval = {
-  '1Dk': '1m',  // dakikalık mum grafiği
+  '1Dk': '1m', // dakikalık mum grafiği
   '24S': '15m',
   '1H': '4h',
   '1A': '1d',
@@ -82,7 +83,8 @@ final priceHistoryProvider =
 
   try {
     final api = ref.watch(apiServiceProvider);
-    final candles = await api.getCandleHistory(keys.first.id, coin.pair, interval);
+    final candles =
+        await api.getCandleHistory(keys.first.id, coin.pair, interval);
     return candles.map((c) => c.close).toList();
   } catch (_) {
     return [];
@@ -112,11 +114,11 @@ class TradeFormState {
   final String? selectedKeyId; // exchangeKeyId for backend
   final double accountBalance; // fetched from real API
   final String selectedCoinIdx; // index into _kTradeCoins
-  final String orderType;      // Limit / Market / Stop-Limit
-  final double riskPercent;    // synced from the user's risk profile
-  final double rrRatio;        // synced from the user's risk profile (1:R)
-  final bool isFutures;        // false = Spot, true = Futures (kaldıraçlı)
-  final int leverage;          // sadece isFutures true iken anlamlı (1-20x)
+  final String orderType; // Limit / Market / Stop-Limit
+  final double riskPercent; // synced from the user's risk profile
+  final double rrRatio; // synced from the user's risk profile (1:R)
+  final bool isFutures; // false = Spot, true = Futures (kaldıraçlı)
+  final int leverage; // sadece isFutures true iken anlamlı (1-20x)
 
   const TradeFormState({
     this.side = TradeSide.buy,
@@ -135,9 +137,23 @@ class TradeFormState {
   double get riskAmount => accountBalance * (riskPercent / 100);
   double get stopDistance => (entryPrice - stopLoss).abs();
   double get idealUnits => stopDistance > 0 ? riskAmount / stopDistance : 0;
+
+  /// Toplam pozisyon büyüklüğü (notional) — kaldıraçtan bağımsız, sadece
+  /// miktar × giriş fiyatı. Futures'ta borsaya kilitlenecek gerçek tutar
+  /// bu değil, [estimatedMargin]'dir.
   double get positionSize => idealUnits * entryPrice;
   double get positionPercent =>
       accountBalance > 0 ? (positionSize / accountBalance) * 100 : 0;
+
+  /// Futures'ta borsa hesabından gerçekten kilitlenecek izole marj —
+  /// notional / kaldıraç. Spot'ta (ya da 1x'te) notional'ın kendisiyle
+  /// aynıdır. Risk hesaplayıcıdaki "İdeal Alım Miktarı" satırı her zaman
+  /// notional'ı gösterdiği için (ör. $5.000), kaldıraçlı bir işlemde borsada
+  /// kilitlenen gerçek tutar (ör. $410) bununla karıştırılmasın diye ayrıca
+  /// gösteriliyor.
+  double get estimatedMargin =>
+      isFutures && leverage > 1 ? positionSize / leverage : positionSize;
+
   /// Long'da (Al) hedef girişin üstünde, short'ta (Sat) altındadır.
   double get targetPrice => side == TradeSide.buy
       ? entryPrice + stopDistance * rrRatio
@@ -218,7 +234,9 @@ class TradeFormNotifier extends StateNotifier<TradeFormState> {
   /// zorlanır — spot piyasalarda açığa satış yoktur (backend de reddeder).
   void setIsFutures(bool futures) => state = state.copyWith(
         isFutures: futures,
-        side: (!futures && state.side == TradeSide.sell) ? TradeSide.buy : state.side,
+        side: (!futures && state.side == TradeSide.sell)
+            ? TradeSide.buy
+            : state.side,
         leverage: futures ? state.leverage : 1,
       );
 
@@ -241,7 +259,8 @@ class TradeFormNotifier extends StateNotifier<TradeFormState> {
   }
 }
 
-final tradeFormProvider = StateNotifierProvider<TradeFormNotifier, TradeFormState>(
+final tradeFormProvider =
+    StateNotifierProvider<TradeFormNotifier, TradeFormState>(
   (_) => TradeFormNotifier(),
 );
 
@@ -280,7 +299,10 @@ class TradeScreen extends ConsumerWidget {
       body: Stack(
         children: [
           const Positioned(
-            top: 0, left: 0, right: 0, height: 250,
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 250,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
@@ -308,7 +330,8 @@ class TradeScreen extends ConsumerWidget {
                                   fontSize: 13, color: AppColors.text3)),
                           const Spacer(),
                           GestureDetector(
-                            onTap: () => _showOrderTypePicker(context, state, notifier),
+                            onTap: () =>
+                                _showOrderTypePicker(context, state, notifier),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 6),
@@ -357,7 +380,8 @@ class TradeScreen extends ConsumerWidget {
                       const SizedBox(height: 14),
 
                       // Coin price header — updates when coin changes
-                      _CoinPriceHeader(coin: state.coin, entryPrice: state.entryPrice),
+                      _CoinPriceHeader(
+                          coin: state.coin, entryPrice: state.entryPrice),
                       const SizedBox(height: 12),
 
                       // Chart
@@ -392,7 +416,8 @@ class TradeScreen extends ConsumerWidget {
                         const SizedBox(height: 6),
                         Text(
                           'Spot piyasalarda açığa satış (short) yapılamaz — short için Futures\'a geçin.',
-                          style: GoogleFonts.spaceGrotesk(fontSize: 10.5, color: AppColors.text3),
+                          style: GoogleFonts.spaceGrotesk(
+                              fontSize: 10.5, color: AppColors.text3),
                         ),
                       ],
                       const SizedBox(height: 14),
@@ -419,7 +444,8 @@ class TradeScreen extends ConsumerWidget {
                       // yakalamıyordu — field eski değeri göstermeye devam
                       // ediyordu.
                       _InputCard(
-                        key: ValueKey('stop-${state.selectedCoinIdx}-${state.side}'),
+                        key: ValueKey(
+                            'stop-${state.selectedCoinIdx}-${state.side}'),
                         label: 'Zarar Kes (Stop-Loss)',
                         value: state.stopLoss,
                         suffix: '-${state.stopPercent.toStringAsFixed(2)}%',
@@ -437,7 +463,8 @@ class TradeScreen extends ConsumerWidget {
                       const SizedBox(height: 18),
 
                       // Active orders panel
-                      _ActiveOrdersPanel(ordersAsync: activeOrdersAsync, ref: ref),
+                      _ActiveOrdersPanel(
+                          ordersAsync: activeOrdersAsync, ref: ref),
                       const SizedBox(height: 44),
                     ],
                   ),
@@ -464,7 +491,8 @@ class TradeScreen extends ConsumerWidget {
             // aralığında (1 aylık mumlar) borsadan çok az veri dönebiliyor.
             return Center(
               child: Text('Bu aralık için yeterli veri yok',
-                  style: GoogleFonts.spaceGrotesk(fontSize: 12, color: AppColors.text3)),
+                  style: GoogleFonts.spaceGrotesk(
+                      fontSize: 12, color: AppColors.text3)),
             );
           }
           final maxY = points.reduce((a, b) => a > b ? a : b);
@@ -499,10 +527,8 @@ class TradeScreen extends ConsumerWidget {
                   barWidth: 1.8,
                   dotData: FlDotData(
                     show: true,
-                    checkToShowDot: (spot, _) =>
-                        spot.x == spots.last.x,
-                    getDotPainter: (_, __, ___, ____) =>
-                        FlDotCirclePainter(
+                    checkToShowDot: (spot, _) => spot.x == spots.last.x,
+                    getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
                       radius: 3.5,
                       color: AppColors.accent,
                       strokeWidth: 0,
@@ -565,7 +591,8 @@ class TradeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMarketTypeToggle(TradeFormState state, TradeFormNotifier notifier) {
+  Widget _buildMarketTypeToggle(
+      TradeFormState state, TradeFormNotifier notifier) {
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
@@ -590,7 +617,8 @@ class TradeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLeverageSlider(TradeFormState state, TradeFormNotifier notifier) {
+  Widget _buildLeverageSlider(
+      TradeFormState state, TradeFormNotifier notifier) {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
       decoration: BoxDecoration(
@@ -605,12 +633,16 @@ class TradeScreen extends ConsumerWidget {
             children: [
               Text('KALDIRAÇ',
                   style: GoogleFonts.spaceGrotesk(
-                      fontSize: 10, fontWeight: FontWeight.w600,
-                      color: AppColors.text3, letterSpacing: 0.06)),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text3,
+                      letterSpacing: 0.06)),
               const Spacer(),
               Text('${state.leverage}x',
                   style: AppTheme.mono(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.accent)),
             ],
           ),
           Slider(
@@ -647,9 +679,9 @@ class TradeScreen extends ConsumerWidget {
             selected: state.side == TradeSide.sell,
             isBuy: false,
             // Spot'ta short yok — backend de reddediyor, burada da engelle.
-            onTap: state.isFutures ? () => notifier.setSide(TradeSide.sell) : null,
+            onTap:
+                state.isFutures ? () => notifier.setSide(TradeSide.sell) : null,
           ),
-
         ],
       ),
     );
@@ -684,7 +716,8 @@ class TradeScreen extends ConsumerWidget {
                         color: AppColors.accent,
                         letterSpacing: 0.1,
                       )),
-                  Text('Profil: kasanın %${state.riskPercent.toStringAsFixed(0)} riski',
+                  Text(
+                      'Profil: kasanın %${state.riskPercent.toStringAsFixed(0)} riski',
                       style: GoogleFonts.spaceGrotesk(
                           fontSize: 11, color: AppColors.text3)),
                 ],
@@ -702,8 +735,7 @@ class TradeScreen extends ConsumerWidget {
             children: [
               Text(
                 state.idealUnits.toStringAsFixed(4),
-                style: AppTheme.mono(
-                    fontSize: 28, fontWeight: FontWeight.w500),
+                style: AppTheme.mono(fontSize: 28, fontWeight: FontWeight.w500),
               ),
               const SizedBox(width: 6),
               Text(state.coin.symbol,
@@ -718,6 +750,24 @@ class TradeScreen extends ConsumerWidget {
               ),
             ],
           ),
+          if (state.isFutures && state.leverage > 1) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Text('Gerekli marj (İzole, ${state.leverage}x)',
+                    style: GoogleFonts.spaceGrotesk(
+                        fontSize: 10.5, color: AppColors.text3)),
+                const Spacer(),
+                Text(
+                  '≈ ${Formatters.moneyCompact(state.estimatedMargin)}',
+                  style: AppTheme.mono(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.accent),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 14),
           const Divider(color: AppColors.hairline, height: 1, thickness: 0.5),
           const SizedBox(height: 12),
@@ -746,21 +796,27 @@ class TradeScreen extends ConsumerWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.warning_amber_rounded, color: AppColors.loss, size: 13),
+                const Icon(Icons.warning_amber_rounded,
+                    color: AppColors.loss, size: 13),
                 const SizedBox(width: 6),
                 Text('≈ Yaklaşık Likidasyon (${state.leverage}x)',
-                    style: GoogleFonts.spaceGrotesk(fontSize: 11, color: AppColors.text3)),
+                    style: GoogleFonts.spaceGrotesk(
+                        fontSize: 11, color: AppColors.text3)),
                 const Spacer(),
                 Text(
                   Formatters.moneyCompact(state.estimatedLiquidationPrice!),
-                  style: AppTheme.mono(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.loss),
+                  style: AppTheme.mono(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.loss),
                 ),
               ],
             ),
             const SizedBox(height: 4),
             Text(
               'Kesin değer emir gönderildikten sonra borsadan alınır.',
-              style: GoogleFonts.spaceGrotesk(fontSize: 9.5, color: AppColors.text3),
+              style: GoogleFonts.spaceGrotesk(
+                  fontSize: 9.5, color: AppColors.text3),
             ),
           ],
         ],
@@ -768,7 +824,8 @@ class TradeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildConfirmButton(BuildContext context, WidgetRef ref, TradeFormState state) {
+  Widget _buildConfirmButton(
+      BuildContext context, WidgetRef ref, TradeFormState state) {
     final isBuy = state.side == TradeSide.buy;
     final color = isBuy ? AppColors.profit : AppColors.loss;
     final commission = state.positionSize * 0.001;
@@ -817,7 +874,8 @@ class TradeScreen extends ConsumerWidget {
             const SizedBox(width: 4),
             Text(
               'Komisyon dahil ≈ ${Formatters.money(commission)}',
-              style: GoogleFonts.spaceGrotesk(fontSize: 11, color: AppColors.text3),
+              style: GoogleFonts.spaceGrotesk(
+                  fontSize: 11, color: AppColors.text3),
             ),
           ],
         ),
@@ -825,7 +883,8 @@ class TradeScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _submitOrder(BuildContext context, WidgetRef ref, TradeFormState state) async {
+  Future<void> _submitOrder(
+      BuildContext context, WidgetRef ref, TradeFormState state) async {
     if (state.selectedKeyId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Lütfen bir borsa bağlantısı seçin')),
@@ -834,7 +893,7 @@ class TradeScreen extends ConsumerWidget {
     }
     final payload = CreateOrderPayload(
       exchangeKeyId: state.selectedKeyId!,
-      symbol: state.coin.pair,   // use selected coin, not hardcoded BTCUSDT
+      symbol: state.coin.pair, // use selected coin, not hardcoded BTCUSDT
       side: state.side == TradeSide.buy ? 'BUY' : 'SELL',
       type: state.orderType.toUpperCase().replaceAll('-', '_'),
       amount: state.idealUnits,
@@ -856,7 +915,8 @@ class TradeScreen extends ConsumerWidget {
       ref.invalidate(transactionsProvider);
 
       if (context.mounted) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderSuccessScreen()));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const OrderSuccessScreen()));
       }
     } on DioException catch (e) {
       if (context.mounted) {
@@ -868,7 +928,8 @@ class TradeScreen extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.loss),
+          SnackBar(
+              content: Text(e.toString()), backgroundColor: AppColors.loss),
         );
       }
     }
@@ -887,41 +948,51 @@ class TradeScreen extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Emir Tipi', style: GoogleFonts.spaceGrotesk(
-                fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.text1)),
+            Text('Emir Tipi',
+                style: GoogleFonts.spaceGrotesk(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text1)),
             const SizedBox(height: 4),
             Text('Kullanmak istediğiniz emir tipini seçin',
-                style: GoogleFonts.spaceGrotesk(fontSize: 12, color: AppColors.text3)),
+                style: GoogleFonts.spaceGrotesk(
+                    fontSize: 12, color: AppColors.text3)),
             const SizedBox(height: 16),
             ..._kOrderTypes.map((t) => GestureDetector(
-              onTap: () {
-                notifier.setOrderType(t);
-                Navigator.pop(context);
-              },
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                decoration: BoxDecoration(
-                  color: state.orderType == t
-                      ? AppColors.accentSoft
-                      : const Color(0x0AFFFFFF),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
+                  onTap: () {
+                    notifier.setOrderType(t);
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 13),
+                    decoration: BoxDecoration(
                       color: state.orderType == t
-                          ? AppColors.hairlineAccent
-                          : AppColors.hairline,
-                      width: 0.5),
-                ),
-                child: Row(children: [
-                  Text(t, style: GoogleFonts.spaceGrotesk(
-                      fontSize: 14, fontWeight: FontWeight.w500,
-                      color: state.orderType == t ? AppColors.accent : AppColors.text1)),
-                  const Spacer(),
-                  if (state.orderType == t)
-                    const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 18),
-                ]),
-              ),
-            )),
+                          ? AppColors.accentSoft
+                          : const Color(0x0AFFFFFF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: state.orderType == t
+                              ? AppColors.hairlineAccent
+                              : AppColors.hairline,
+                          width: 0.5),
+                    ),
+                    child: Row(children: [
+                      Text(t,
+                          style: GoogleFonts.spaceGrotesk(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: state.orderType == t
+                                  ? AppColors.accent
+                                  : AppColors.text1)),
+                      const Spacer(),
+                      if (state.orderType == t)
+                        const Icon(Icons.check_circle_rounded,
+                            color: AppColors.accent, size: 18),
+                    ]),
+                  ),
+                )),
           ],
         ),
       ),
@@ -1042,14 +1113,10 @@ class _InputCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: isLoss
-            ? const Color(0xFF0E1430)
-            : AppColors.surface1,
+        color: isLoss ? const Color(0xFF0E1430) : AppColors.surface1,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isLoss
-              ? const Color(0x2EF08080)
-              : AppColors.hairline,
+          color: isLoss ? const Color(0x2EF08080) : AppColors.hairline,
           width: 0.5,
         ),
         gradient: isLoss
@@ -1087,13 +1154,13 @@ class _InputCard extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text('\$',
-                  style:
-                      AppTheme.mono(fontSize: 14, color: AppColors.text3)),
+                  style: AppTheme.mono(fontSize: 14, color: AppColors.text3)),
               const SizedBox(width: 4),
               Expanded(
                 child: TextFormField(
                   initialValue: Formatters.price(value),
-                  style: AppTheme.mono(fontSize: 20, fontWeight: FontWeight.w500),
+                  style:
+                      AppTheme.mono(fontSize: 20, fontWeight: FontWeight.w500),
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     border: InputBorder.none,
@@ -1137,15 +1204,11 @@ class _RiskStat extends StatelessWidget {
         children: [
           Text(label,
               style: GoogleFonts.spaceGrotesk(
-                  fontSize: 10,
-                  color: AppColors.text3,
-                  letterSpacing: 0.02)),
+                  fontSize: 10, color: AppColors.text3, letterSpacing: 0.02)),
           const SizedBox(height: 3),
           Text(value,
               style: AppTheme.mono(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: color)),
+                  fontSize: 13, fontWeight: FontWeight.w500, color: color)),
         ],
       ),
     );
@@ -1177,10 +1240,12 @@ class _ExchangeKeySelector extends StatelessWidget {
               border: Border.all(color: AppColors.hairline, width: 0.5),
             ),
             child: Row(children: [
-              const Icon(Icons.warning_amber_rounded, color: AppColors.loss, size: 16),
+              const Icon(Icons.warning_amber_rounded,
+                  color: AppColors.loss, size: 16),
               const SizedBox(width: 8),
               Text('Borsa bağlantısı yok — önce API Key ekleyin',
-                  style: GoogleFonts.spaceGrotesk(fontSize: 12, color: AppColors.text3)),
+                  style: GoogleFonts.spaceGrotesk(
+                      fontSize: 12, color: AppColors.text3)),
             ]),
           );
         }
@@ -1194,21 +1259,33 @@ class _ExchangeKeySelector extends StatelessWidget {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: selectedId,
-              hint: Text('Borsa seç', style: GoogleFonts.spaceGrotesk(fontSize: 13, color: AppColors.text3)),
+              hint: Text('Borsa seç',
+                  style: GoogleFonts.spaceGrotesk(
+                      fontSize: 13, color: AppColors.text3)),
               dropdownColor: AppColors.surface2,
               isExpanded: true,
-              icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.text3, size: 18),
-              items: keys.map((k) => DropdownMenuItem(
-                value: k.id,
-                child: Text('${k.exchange} — ${k.mask}',
-                    style: GoogleFonts.spaceGrotesk(fontSize: 13, color: AppColors.text1)),
-              )).toList(),
-              onChanged: (v) { if (v != null) onSelected(v); },
+              icon: const Icon(Icons.keyboard_arrow_down,
+                  color: AppColors.text3, size: 18),
+              items: keys
+                  .map((k) => DropdownMenuItem(
+                        value: k.id,
+                        child: Text('${k.exchange} — ${k.mask}',
+                            style: GoogleFonts.spaceGrotesk(
+                                fontSize: 13, color: AppColors.text1)),
+                      ))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) onSelected(v);
+              },
             ),
           ),
         );
       },
-      loading: () => const SizedBox(height: 44, child: Center(child: CircularProgressIndicator(color: AppColors.accent, strokeWidth: 2))),
+      loading: () => const SizedBox(
+          height: 44,
+          child: Center(
+              child: CircularProgressIndicator(
+                  color: AppColors.accent, strokeWidth: 2))),
       error: (_, __) => const SizedBox.shrink(),
     );
   }
@@ -1233,12 +1310,20 @@ class _ActiveOrdersPanel extends StatelessWidget {
           children: [
             Row(children: [
               Text('AKTİF POZİSYONLAR',
-                  style: GoogleFonts.spaceGrotesk(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.text3, letterSpacing: 0.1)),
+                  style: GoogleFonts.spaceGrotesk(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text3,
+                      letterSpacing: 0.1)),
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: AppColors.accentSoft, borderRadius: BorderRadius.circular(4)),
-                child: Text('${open.length}', style: AppTheme.mono(fontSize: 10, color: AppColors.accent)),
+                decoration: BoxDecoration(
+                    color: AppColors.accentSoft,
+                    borderRadius: BorderRadius.circular(4)),
+                child: Text('${open.length}',
+                    style:
+                        AppTheme.mono(fontSize: 10, color: AppColors.accent)),
               ),
             ]),
             const SizedBox(height: 10),
@@ -1246,7 +1331,11 @@ class _ActiveOrdersPanel extends StatelessWidget {
           ],
         );
       },
-      loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: AppColors.accent, strokeWidth: 2))),
+      loading: () => const Center(
+          child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(
+                  color: AppColors.accent, strokeWidth: 2))),
       error: (_, __) => const SizedBox.shrink(),
     );
   }
@@ -1277,81 +1366,140 @@ class _OrderCard extends StatelessWidget {
       }
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: liqWarning != null ? AppColors.loss.withValues(alpha: 0.5) : AppColors.hairline,
-          width: liqWarning != null ? 1 : 0.5,
-        ),
+    return GestureDetector(
+      onTap: () => showTradeDetailSheet(
+        context,
+        symbol: order.symbol,
+        isBuy: order.isBuy,
+        isFutures: order.isFutures,
+        statusBadge: 'AÇIK',
+        leverage: order.leverage,
+        marginMode: order.marginMode,
+        entryPrice: order.entryPrice,
+        stopLoss: order.stopLoss,
+        takeProfit: order.takeProfit,
+        liquidationPrice: order.liquidationPrice,
+        amount: order.amount,
+        pnl: order.currentPnL,
+        pnlPercent: order.pnlPercent,
+        openedAt: order.createdAt,
       ),
-      child: Row(children: [
-        CoinAvatar(symbol: order.symbol.replaceAll('USDT', '').replaceAll('BUSD', ''), size: 32),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: order.isBuy ? AppColors.profitSoft : AppColors.lossSoft,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                  order.isFutures
-                      ? (order.isBuy ? 'LONG' : 'SHORT')
-                      : (order.isBuy ? 'ALIŞ' : 'SATIŞ'),
-                  style: GoogleFonts.spaceGrotesk(fontSize: 9, fontWeight: FontWeight.w700,
-                      color: order.isBuy ? AppColors.profit : AppColors.loss)),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface1,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: liqWarning != null
+                ? AppColors.loss.withValues(alpha: 0.5)
+                : AppColors.hairline,
+            width: liqWarning != null ? 1 : 0.5,
+          ),
+        ),
+        child: Row(children: [
+          CoinAvatar(
+              symbol:
+                  order.symbol.replaceAll('USDT', '').replaceAll('BUSD', ''),
+              size: 32),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Row(children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: order.isBuy
+                          ? AppColors.profitSoft
+                          : AppColors.lossSoft,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                        order.isFutures
+                            ? (order.isBuy ? 'LONG' : 'SHORT')
+                            : (order.isBuy ? 'ALIŞ' : 'SATIŞ'),
+                        style: GoogleFonts.spaceGrotesk(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: order.isBuy
+                                ? AppColors.profit
+                                : AppColors.loss)),
+                  ),
+                  if (order.isFutures) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentSoft,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text('${order.leverage ?? 1}x',
+                          style: GoogleFonts.spaceGrotesk(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.accent)),
+                    ),
+                  ],
+                  const SizedBox(width: 6),
+                  Text(order.symbol,
+                      style: GoogleFonts.spaceGrotesk(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.text1)),
+                ]),
+                const SizedBox(height: 2),
+                Text('${order.amount.toStringAsFixed(4)} adet',
+                    style: AppTheme.mono(fontSize: 11, color: AppColors.text3)),
+                if (liqWarning != null) ...[
+                  const SizedBox(height: 3),
+                  Text(liqWarning,
+                      style: GoogleFonts.spaceGrotesk(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.loss)),
+                ],
+              ])),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(
+              '${isProfit ? '+' : ''}${Formatters.money(pnl)}',
+              style: AppTheme.mono(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: isProfit ? AppColors.profit : AppColors.loss),
             ),
-            if (order.isFutures) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            if (order.pnlPercent != null)
+              Text(
+                '${isProfit ? '+' : ''}${order.pnlPercent!.toStringAsFixed(2)}%',
+                style: GoogleFonts.spaceGrotesk(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isProfit ? AppColors.profit : AppColors.loss),
+              ),
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: () => _closeOrder(context, order.id),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.accentSoft,
-                  borderRadius: BorderRadius.circular(4),
+                  color: AppColors.lossSoft,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                      color: AppColors.loss.withValues(alpha: 0.3), width: 0.5),
                 ),
-                child: Text('${order.leverage ?? 1}x',
-                    style: GoogleFonts.spaceGrotesk(fontSize: 9, fontWeight: FontWeight.w700,
-                        color: AppColors.accent)),
+                child: Text('Kapat',
+                    style: GoogleFonts.spaceGrotesk(
+                        fontSize: 10,
+                        color: AppColors.loss,
+                        fontWeight: FontWeight.w600)),
               ),
-            ],
-            const SizedBox(width: 6),
-            Text(order.symbol, style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.text1)),
-          ]),
-          const SizedBox(height: 2),
-          Text('${order.amount.toStringAsFixed(4)} adet',
-              style: AppTheme.mono(fontSize: 11, color: AppColors.text3)),
-          if (liqWarning != null) ...[
-            const SizedBox(height: 3),
-            Text(liqWarning,
-                style: GoogleFonts.spaceGrotesk(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.loss)),
-          ],
-        ])),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(
-            '${isProfit ? '+' : ''}${Formatters.money(pnl)}',
-            style: AppTheme.mono(fontSize: 14, fontWeight: FontWeight.w500,
-                color: isProfit ? AppColors.profit : AppColors.loss),
-          ),
-          const SizedBox(height: 4),
-          GestureDetector(
-            onTap: () => _closeOrder(context, order.id),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.lossSoft,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppColors.loss.withValues(alpha: 0.3), width: 0.5),
-              ),
-              child: Text('Kapat', style: GoogleFonts.spaceGrotesk(fontSize: 10, color: AppColors.loss, fontWeight: FontWeight.w600)),
             ),
-          ),
+          ]),
         ]),
-      ]),
+      ),
     );
   }
 
@@ -1361,7 +1509,8 @@ class _OrderCard extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Pozisyon kapatıldı', style: GoogleFonts.spaceGrotesk(color: Colors.white)),
+            content: Text('Pozisyon kapatıldı',
+                style: GoogleFonts.spaceGrotesk(color: Colors.white)),
             backgroundColor: const Color(0xFF1A2040),
             behavior: SnackBarBehavior.floating,
           ),
@@ -1370,7 +1519,8 @@ class _OrderCard extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.loss),
+          SnackBar(
+              content: Text(e.toString()), backgroundColor: AppColors.loss),
         );
       }
     }
@@ -1402,27 +1552,36 @@ class _CoinSelector extends StatelessWidget {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.accentSoft : AppColors.surface1,
+                    color:
+                        isSelected ? AppColors.accentSoft : AppColors.surface1,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isSelected ? AppColors.hairlineAccent : AppColors.hairline,
+                      color: isSelected
+                          ? AppColors.hairlineAccent
+                          : AppColors.hairline,
                       width: 0.5,
                     ),
                   ),
                   child: Row(children: [
                     CoinAvatar(symbol: coin.symbol, size: 22),
                     const SizedBox(width: 7),
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(coin.symbol,
-                          style: GoogleFonts.spaceGrotesk(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isSelected ? AppColors.accent : AppColors.text1)),
-                      Text(coin.pair,
-                          style: AppTheme.mono(fontSize: 9, color: AppColors.text3)),
-                    ]),
+                    Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(coin.symbol,
+                              style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isSelected
+                                      ? AppColors.accent
+                                      : AppColors.text1)),
+                          Text(coin.pair,
+                              style: AppTheme.mono(
+                                  fontSize: 9, color: AppColors.text3)),
+                        ]),
                   ]),
                 ),
               );
@@ -1456,33 +1615,44 @@ class _CoinPriceHeader extends ConsumerWidget {
     }
     final delta = match?.priceChangePercent ?? 0.0;
     final livePrice = ref.watch(livePricesProvider)[coin.symbol];
-    final price =
-        livePrice ?? match?.price ?? _kCoinBasePrices[coin.symbol] ?? entryPrice;
+    final price = livePrice ??
+        match?.price ??
+        _kCoinBasePrices[coin.symbol] ??
+        entryPrice;
 
     return Row(children: [
       CoinAvatar(symbol: coin.symbol, size: 42),
       const SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text(coin.name, style: GoogleFonts.spaceGrotesk(
-              fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.1)),
+          Text(coin.name,
+              style: GoogleFonts.spaceGrotesk(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1)),
           const SizedBox(width: 8),
-          Text(coin.pair, style: AppTheme.mono(fontSize: 11, color: AppColors.text3)),
+          Text(coin.pair,
+              style: AppTheme.mono(fontSize: 11, color: AppColors.text3)),
         ]),
         const SizedBox(height: 4),
         Row(children: [
-          RichText(text: TextSpan(children: [
+          RichText(
+              text: TextSpan(children: [
             TextSpan(
-              text: '\$${price.toStringAsFixed(price < 10 ? 3 : 0).replaceAllMapped(
-                RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},',
-              )}.',
+              text:
+                  '\$${price.toStringAsFixed(price < 10 ? 3 : 0).replaceAllMapped(
+                        RegExp(r'(\d)(?=(\d{3})+$)'),
+                        (m) => '${m[1]},',
+                      )}.',
               style: AppTheme.mono(fontSize: 22, fontWeight: FontWeight.w500),
             ),
             TextSpan(
-              text: price < 10
-                  ? ''
-                  : price.toStringAsFixed(2).split('.')[1],
-              style: AppTheme.mono(fontSize: 22, fontWeight: FontWeight.w500,
+              text: price < 10 ? '' : price.toStringAsFixed(2).split('.')[1],
+              style: AppTheme.mono(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w500,
                   color: AppColors.text3),
             ),
           ])),

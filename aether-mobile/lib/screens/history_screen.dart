@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/coin_avatar.dart';
+import '../widgets/trade_detail_sheet.dart';
 
 // ── Provider ───────────────────────────────────────────────────────────
 /// GET /api/v1/trades/history → hem açık hem kapalı emirleri
@@ -71,8 +72,8 @@ class HistoryScreen extends ConsumerWidget {
                         decoration: BoxDecoration(
                           color: AppColors.surface1,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: AppColors.hairline, width: 0.5),
+                          border:
+                              Border.all(color: AppColors.hairline, width: 0.5),
                         ),
                         child: const Icon(Icons.search,
                             color: AppColors.text2, size: 18),
@@ -114,8 +115,7 @@ class HistoryScreen extends ConsumerWidget {
                   (ctx, gi) {
                     final group = groups[gi];
                     return Padding(
-                      padding: EdgeInsets.fromLTRB(
-                          22, gi == 0 ? 0 : 18, 22, 0),
+                      padding: EdgeInsets.fromLTRB(22, gi == 0 ? 0 : 18, 22, 0),
                       child: _DateGroup(group: group),
                     );
                   },
@@ -140,7 +140,8 @@ class HistoryScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   Text('Geçmiş yüklenemedi',
                       style: GoogleFonts.spaceGrotesk(
-                          fontSize: 15, fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.text2)),
                   const SizedBox(height: 6),
                   Text('Sunucu bağlantısını kontrol edin ve tekrar deneyin.',
@@ -151,14 +152,17 @@ class HistoryScreen extends ConsumerWidget {
                   GestureDetector(
                     onTap: () => ref.invalidate(transactionsProvider),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
                       decoration: BoxDecoration(
                           color: AppColors.accentSoft,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.hairlineAccent, width: 0.5)),
+                          border: Border.all(
+                              color: AppColors.hairlineAccent, width: 0.5)),
                       child: Text('Tekrar Dene',
                           style: GoogleFonts.spaceGrotesk(
-                              fontSize: 13, fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                               color: AppColors.accent)),
                     ),
                   ),
@@ -172,8 +176,7 @@ class HistoryScreen extends ConsumerWidget {
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
                 child: Text('— Geçmişin sonu —',
-                    style: TextStyle(
-                        fontSize: 11, color: AppColors.text3)),
+                    style: TextStyle(fontSize: 11, color: AppColors.text3)),
               ),
             ),
           ),
@@ -184,10 +187,8 @@ class HistoryScreen extends ConsumerWidget {
   }
 
   Widget _buildSummary(List<Transaction> txs) {
-    final buys =
-        txs.where((t) => t.isBuy).fold(0.0, (s, t) => s + t.total);
-    final sells =
-        txs.where((t) => !t.isBuy).fold(0.0, (s, t) => s + t.total);
+    final buys = txs.where((t) => t.isBuy).fold(0.0, (s, t) => s + t.total);
+    final sells = txs.where((t) => !t.isBuy).fold(0.0, (s, t) => s + t.total);
     return Row(
       children: [
         Expanded(
@@ -223,9 +224,8 @@ class HistoryScreen extends ConsumerWidget {
                 child: _FilterChip(
                   option: f,
                   selected: filter == f.id,
-                  onTap: () => ref
-                      .read(historyFilterProvider.notifier)
-                      .state = f.id,
+                  onTap: () =>
+                      ref.read(historyFilterProvider.notifier).state = f.id,
                 ),
               ))
           .toList(),
@@ -278,15 +278,11 @@ class _SummaryCard extends StatelessWidget {
         children: [
           Text(label.toUpperCase(),
               style: GoogleFonts.spaceGrotesk(
-                  fontSize: 10,
-                  color: AppColors.text3,
-                  letterSpacing: 0.04)),
+                  fontSize: 10, color: AppColors.text3, letterSpacing: 0.04)),
           const SizedBox(height: 4),
           Text(value,
               style: AppTheme.mono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: color)),
+                  fontSize: 16, fontWeight: FontWeight.w500, color: color)),
         ],
       ),
     );
@@ -307,8 +303,7 @@ class _FilterChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: selected ? AppColors.accentSoft : AppColors.surface1,
           borderRadius: BorderRadius.circular(999),
@@ -366,9 +361,7 @@ class _DateGroup extends StatelessWidget {
               ),
             ),
             Column(
-              children: group.items
-                  .map((t) => _TxRow(tx: t))
-                  .toList(),
+              children: group.items.map((t) => _TxRow(tx: t)).toList(),
             ),
           ],
         ),
@@ -407,98 +400,134 @@ class _TxRow extends StatelessWidget {
           ),
           // Card
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              decoration: BoxDecoration(
-                color: AppColors.surface1,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.hairline, width: 0.5),
+            child: GestureDetector(
+              onTap: () => showTradeDetailSheet(
+                context,
+                symbol: tx.symbol,
+                isBuy: tx.isBuy,
+                isFutures: tx.isFutures,
+                statusBadge: tx.isOpen ? 'AÇIK' : null,
+                leverage: tx.leverage,
+                marginMode: tx.marginMode,
+                entryPrice: tx.price,
+                exitPrice: tx.exitPrice,
+                stopLoss: tx.stopLoss,
+                takeProfit: tx.takeProfit,
+                liquidationPrice: tx.liquidationPrice,
+                amount: tx.amount,
+                pnl: tx.pnl,
+                pnlPercent: tx.pnlPercent,
+                openedAt: '${tx.date} ${tx.time}',
+                closedAt: tx.closedAt,
               ),
-              child: Row(
-                children: [
-                  CoinAvatar(symbol: tx.symbol, size: 30),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              tx.isBuy ? 'ALIŞ' : 'SATIŞ',
-                              style: GoogleFonts.spaceGrotesk(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: tx.isBuy
-                                    ? AppColors.profit
-                                    : AppColors.loss,
-                                letterSpacing: 0.04,
-                              ),
-                            ),
-                            if (tx.isOpen) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: AppColors.accentSoft,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text('AÇIK',
-                                    style: GoogleFonts.spaceGrotesk(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.accent,
-                                        letterSpacing: 0.04)),
-                              ),
-                            ],
-                            const SizedBox(width: 6),
-                            Text(tx.symbol,
-                                style: GoogleFonts.spaceGrotesk(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.text1)),
-                            const Spacer(),
-                            Text(tx.time,
-                                style: AppTheme.mono(
-                                    fontSize: 11,
-                                    color: AppColors.text3)),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            Text(
-                              '${Formatters.coinAmount(tx.amount)} @ \$${Formatters.price(tx.price)}',
-                              style: AppTheme.mono(
-                                  fontSize: 12, color: AppColors.text2),
-                            ),
-                            const Spacer(),
-                            if (tx.pnl != null)
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surface1,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.hairline, width: 0.5),
+                ),
+                child: Row(
+                  children: [
+                    CoinAvatar(symbol: tx.symbol, size: 30),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
                               Text(
-                                '${tx.pnl! >= 0 ? '+' : ''}${Formatters.money(tx.pnl!)}',
-                                style: AppTheme.mono(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: tx.pnl! >= 0
+                                tx.isBuy ? 'ALIŞ' : 'SATIŞ',
+                                style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: tx.isBuy
                                       ? AppColors.profit
                                       : AppColors.loss,
-                                ),
-                              )
-                            else
-                              Text(
-                                '${tx.isBuy ? '−' : '+'}${Formatters.money(tx.total)}',
-                                style: AppTheme.mono(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0.04,
                                 ),
                               ),
-                          ],
-                        ),
-                      ],
+                              if (tx.isOpen) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentSoft,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text('AÇIK',
+                                      style: GoogleFonts.spaceGrotesk(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.accent,
+                                          letterSpacing: 0.04)),
+                                ),
+                              ],
+                              const SizedBox(width: 6),
+                              Text(tx.symbol,
+                                  style: GoogleFonts.spaceGrotesk(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.text1)),
+                              const Spacer(),
+                              Text(tx.time,
+                                  style: AppTheme.mono(
+                                      fontSize: 11, color: AppColors.text3)),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Text(
+                                '${Formatters.coinAmount(tx.amount)} @ \$${Formatters.price(tx.price)}',
+                                style: AppTheme.mono(
+                                    fontSize: 12, color: AppColors.text2),
+                              ),
+                              const Spacer(),
+                              if (tx.pnl != null)
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '${tx.pnl! >= 0 ? '+' : ''}${Formatters.money(tx.pnl!)}',
+                                      style: AppTheme.mono(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: tx.pnl! >= 0
+                                            ? AppColors.profit
+                                            : AppColors.loss,
+                                      ),
+                                    ),
+                                    if (tx.pnlPercent != null)
+                                      Text(
+                                        '${tx.pnlPercent! >= 0 ? '+' : ''}${tx.pnlPercent!.toStringAsFixed(2)}%',
+                                        style: GoogleFonts.spaceGrotesk(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: tx.pnl! >= 0
+                                              ? AppColors.profit
+                                              : AppColors.loss,
+                                        ),
+                                      ),
+                                  ],
+                                )
+                              else
+                                Text(
+                                  '${tx.isBuy ? '−' : '+'}${Formatters.money(tx.total)}',
+                                  style: AppTheme.mono(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

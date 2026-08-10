@@ -196,7 +196,7 @@ class PortfolioBreakdownScreen extends ConsumerWidget {
                                                 fontWeight: FontWeight.w500,
                                                 color: AppColors.text1))),
                                     Text(
-                                        '\$${Formatters.money(a.usdValue, decimals: 0)}',
+                                        Formatters.money(a.usdValue, decimals: 0),
                                         style: AppTheme.mono(
                                             fontSize: 12,
                                             color: AppColors.text3)),
@@ -355,7 +355,7 @@ class _DonutChart extends StatelessWidget {
                     color: AppColors.text3,
                     letterSpacing: 0.1)),
             const SizedBox(height: 2),
-            Text('\$${Formatters.money(total, decimals: 0)}',
+            Text(Formatters.money(total, decimals: 0),
                 style: AppTheme.mono(
                     fontSize: 22,
                     fontWeight: FontWeight.w500,

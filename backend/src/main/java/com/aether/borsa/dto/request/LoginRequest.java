@@ -17,4 +17,12 @@ public class LoginRequest {
     /** Only required when the account has 2FA enabled. */
     private String twoFactorCode;
 
+    /**
+     * "Oturumu açık tut" — true olursa refresh token kısa (7 gün) yerine
+     * uzun ömürlü (application.yml'deki jwt.remember-me-refresh-expiration)
+     * verilir, böylece kullanıcı günlük 401/expiry döngüsüne takılmadan
+     * uzun süre giriş yapmış kalabilir.
+     */
+    private boolean rememberMe;
+
 }

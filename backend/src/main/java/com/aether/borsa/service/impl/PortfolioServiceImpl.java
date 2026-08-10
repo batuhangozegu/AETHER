@@ -41,7 +41,15 @@ public class PortfolioServiceImpl implements PortfolioService {
 
         User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found."));
 
-        BigDecimal totalBalance = exchangeService.getBalance(userId, exchangeKeyId, "USDT");
+        // Sadece USDT bakiyesi değil, açık pozisyonlardaki coin'ler dahil
+        // tüm varlıkların güncel USD karşılığının toplamı — aksi halde kasa
+        // açık bir işlem varken bile hiç değişmiyormuş gibi görünüyor ve
+        // portfolio breakdown'daki TOPLAM ile tutarsız kalıyordu.
+        Map<String, BigDecimal> balances = exchangeService.getAllBalances(userId, exchangeKeyId);
+        ExchangeKey exchangeKey = exchangeKeyRepository.findById(exchangeKeyId)
+                .orElseThrow(() -> new RuntimeException("Exchange key not found."));
+        IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
+        BigDecimal totalBalance = totalUsdValue(usdValuesByAsset(balances, client));
 
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         List<Order> closedToday = orderRepository.findByUserAndStatusAndClosedAtAfter(
@@ -68,14 +76,8 @@ public class PortfolioServiceImpl implements PortfolioService {
 
         IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
 
-        Map<String, BigDecimal> usdValues = balances.entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        entry -> getUsdValue(entry.getKey(), entry.getValue(), client)
-                ));
-
-        BigDecimal totalUsdValue = usdValues.values().stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Map<String, BigDecimal> usdValues = usdValuesByAsset(balances, client);
+        BigDecimal totalUsdValue = totalUsdValue(usdValues);
 
         return usdValues.entrySet().stream()
                 .map(entry -> {
@@ -105,6 +107,18 @@ public class PortfolioServiceImpl implements PortfolioService {
         }
 
         return diff.multiply(order.getAmount());
+    }
+
+    private Map<String, BigDecimal> usdValuesByAsset(Map<String, BigDecimal> balances, IExchangeClient client) {
+        return balances.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> getUsdValue(entry.getKey(), entry.getValue(), client)
+                ));
+    }
+
+    private BigDecimal totalUsdValue(Map<String, BigDecimal> usdValues) {
+        return usdValues.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private BigDecimal getUsdValue(String symbol, BigDecimal amount, IExchangeClient client) {

@@ -34,6 +34,8 @@ jwt:
   secret: YOUR_JWT_SECRET_HERE
   expiration: 86400000
   refresh-expiration: 604800000
+  # "Oturumu açık tut" seçiliyken kullanılan refresh süresi (30 gün)
+  remember-me-refresh-expiration: 2592000000
 
 encryption:
   secret-key: ???

@@ -1,5 +1,7 @@
 # AETHER — Kripto Risk Yönetimi ve Portföy Yönetim Platformu
 
+> 📌 **Portfolio Project** — This repository is public for review purposes only. Please do not fork or use the code in your own projects.
+
 AETHER, kullanıcı ile kripto para borsaları arasında konumlanan akıllı bir backend platformudur.
 Her emirden önce matematiksel risk hesaplaması yaparak duygusal kararların önüne geçer.
 
@@ -80,25 +82,4 @@ GET  /api/v1/portfolio/breakdown?exchangeKeyId=
 - JWT interceptor: her isteğe otomatik `Authorization: Bearer <token>` ekler, 401'de token'ı siler
 - Exchange Key yoksa portfolio endpoint'leri fallback olarak `getExchangeBalance` (USDT) kullanıyor
 
-## Kurulum
 
-### Backend
-```bash
-# PostgreSQL başlat ve borsa_db oluştur
-createdb borsa_db
-
-# application.yml içindeki DB şifresini düzenle
-# Sonra:
-cd backend
-./mvnw spring-boot:run
-```
-
-### Flutter
-```bash
-cd aether-mobile
-flutter pub get
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
-```
-
-> **Emülatörde** Android emülatörü için host IP `10.0.2.2` (localhost proxy).
-> Fiziksel cihazda bilgisayarın LAN IP'sini kullan.

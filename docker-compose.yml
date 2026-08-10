@@ -1,0 +1,81 @@
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: aether_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: borsa_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aether_net
+    # Sadece iç ağa açık; dışarıya port yayımlamıyoruz (güvenlik)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d borsa_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: aether_redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - aether_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Spring Boot Backend ─────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aether_backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"          # Sunucu IP'si:8080 → container:8080
+    environment:
+      # Veritabanı
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/borsa_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      # Redis
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # JWT & Şifreleme – .env'den gelir, kaynak koda yazma!
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
+      JWT_REMEMBER_ME_REFRESH_EXPIRATION: ${JWT_REMEMBER_ME_REFRESH_EXPIRATION:-2592000000}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      # Spring profil
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aether_net
+
+# ── Kalıcı Veriler ──────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:
+
+# ── İç Ağ ──────────────────────────────────────────────────────────────────
+networks:
+  aether_net:
+    driver: bridge

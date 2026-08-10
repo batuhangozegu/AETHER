@@ -33,6 +33,10 @@ dependencies:
   # Shared preferences (token, settings saklama)
   shared_preferences: ^2.2.3
 
+  # Face ID / parmak izi ile hızlı giriş (uzun ömürlü refresh token'ı olan
+  # cihazlarda şifre yeniden girilmeden oturumun kilidini açmak için)
+  local_auth: ^2.3.0
+
   # Icons
   cupertino_icons: ^1.0.8
 

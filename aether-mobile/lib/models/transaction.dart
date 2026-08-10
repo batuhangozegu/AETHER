@@ -8,8 +8,19 @@ class Transaction {
   final double price;
   final double amount;
   final double total;
-  final String status;   // 'OPEN' | 'CLOSED' | 'CANCELED' | 'TRIGGERED'
-  final double? pnl;      // canlı (OPEN) veya kesinleşmiş (CLOSED) kâr/zarar
+  final String status; // 'OPEN' | 'CLOSED' | 'CANCELED' | 'TRIGGERED'
+  final double? pnl; // canlı (OPEN) veya kesinleşmiş (CLOSED) kâr/zarar
+
+  // Geçmiş/açık işlem detay sheet'i için — hepsi opsiyonel, backend'den
+  // gelmeyen alanlar için UI ilgili satırı basitçe göstermez.
+  final double? exitPrice;
+  final double? stopLoss;
+  final double? takeProfit;
+  final String marketType; // 'SPOT' | 'FUTURES'
+  final int? leverage;
+  final String? marginMode; // 'ISOLATED' | 'CROSS'
+  final double? liquidationPrice;
+  final String? closedAt;
 
   const Transaction({
     required this.id,
@@ -22,10 +33,29 @@ class Transaction {
     required this.total,
     this.status = 'CLOSED',
     this.pnl,
+    this.exitPrice,
+    this.stopLoss,
+    this.takeProfit,
+    this.marketType = 'SPOT',
+    this.leverage,
+    this.marginMode,
+    this.liquidationPrice,
+    this.closedAt,
   });
 
   bool get isBuy => side == 'buy';
   bool get isOpen => status.toUpperCase() == 'OPEN';
+  bool get isFutures => marketType.toUpperCase() == 'FUTURES';
+
+  /// [OrderModel.pnlPercent] ile aynı mantık — bkz. oradaki açıklama.
+  double? get pnlPercent {
+    if (pnl == null || price == 0 || amount == 0) return null;
+    final notional = price * amount;
+    final costBasis =
+        isFutures && (leverage ?? 1) > 1 ? notional / leverage! : notional;
+    if (costBasis == 0) return null;
+    return (pnl! / costBasis) * 100;
+  }
 
   factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
         id: json['id'] as String,
@@ -38,11 +68,20 @@ class Transaction {
         total: (json['total'] as num).toDouble(),
         status: (json['status'] as String?) ?? 'CLOSED',
         pnl: (json['pnl'] as num?)?.toDouble(),
+        exitPrice: (json['exitPrice'] as num?)?.toDouble(),
+        stopLoss: (json['stopLoss'] as num?)?.toDouble(),
+        takeProfit: (json['takeProfit'] as num?)?.toDouble(),
+        marketType: (json['marketType'] as String?) ?? 'SPOT',
+        leverage: (json['leverage'] as num?)?.toInt(),
+        marginMode: json['marginMode'] as String?,
+        liquidationPrice: (json['liquidationPrice'] as num?)?.toDouble(),
+        closedAt: json['closedAt'] as String?,
       );
 
   /// Bir OrderModel'i (açık ya da kapalı) Geçmiş ekranı için Transaction'a
   /// çevirir. Backend: { id, symbol, side, amount, entryPrice, exitPrice,
-  /// status, currentPnL, createdAt }
+  /// status, currentPnL, createdAt, closedAt, marketType, leverage,
+  /// marginMode, liquidationPrice }
   factory Transaction.fromOrder(dynamic order) {
     final createdAt = (order.createdAt as String?) ?? '';
     String date = '';
@@ -58,16 +97,24 @@ class Transaction {
     final price = (order.entryPrice as double?) ?? 0.0;
     final amount = (order.amount as double);
     return Transaction(
-      id:     order.id as String,
-      date:   date,
-      time:   time,
-      side:   side,
+      id: order.id as String,
+      date: date,
+      time: time,
+      side: side,
       symbol: order.symbol as String,
-      price:  price,
+      price: price,
       amount: amount,
-      total:  amount * price,
+      total: amount * price,
       status: (order.status as String?) ?? 'CLOSED',
-      pnl:    order.currentPnL as double?,
+      pnl: order.currentPnL as double?,
+      exitPrice: order.exitPrice as double?,
+      stopLoss: order.stopLoss as double?,
+      takeProfit: order.takeProfit as double?,
+      marketType: (order.marketType as String?) ?? 'SPOT',
+      leverage: order.leverage as int?,
+      marginMode: order.marginMode as String?,
+      liquidationPrice: order.liquidationPrice as double?,
+      closedAt: order.closedAt as String?,
     );
   }
 
@@ -82,5 +129,13 @@ class Transaction {
         'total': total,
         'status': status,
         if (pnl != null) 'pnl': pnl,
+        if (exitPrice != null) 'exitPrice': exitPrice,
+        if (stopLoss != null) 'stopLoss': stopLoss,
+        if (takeProfit != null) 'takeProfit': takeProfit,
+        'marketType': marketType,
+        if (leverage != null) 'leverage': leverage,
+        if (marginMode != null) 'marginMode': marginMode,
+        if (liquidationPrice != null) 'liquidationPrice': liquidationPrice,
+        if (closedAt != null) 'closedAt': closedAt,
       };
 }

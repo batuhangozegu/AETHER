@@ -1,8 +1,10 @@
 // lib/screens/auth_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
+import 'package:local_auth/local_auth.dart';
 import '../providers/app_providers.dart';
 import '../providers/auth_user_provider.dart';
 import '../theme/app_colors.dart';
@@ -36,6 +38,7 @@ class _LoginViewState extends State<_LoginView> {
   final _pwCtrl    = TextEditingController();
   bool _showPw = false;
   bool _loading = false;
+  bool _rememberMe = true;
 
   @override
   void dispose() { _emailCtrl.dispose(); _pwCtrl.dispose(); super.dispose(); }
@@ -55,7 +58,7 @@ class _LoginViewState extends State<_LoginView> {
 
     try {
       final apiService = ref.read(apiServiceProvider);
-      await apiService.login(email, password);
+      await apiService.login(email, password, rememberMe: _rememberMe);
       await _onLoginSuccess(ref, email);
     } on DioException catch (e) {
       final errMsg = _extractError(e);
@@ -67,7 +70,7 @@ class _LoginViewState extends State<_LoginView> {
         }
         try {
           final apiService = ref.read(apiServiceProvider);
-          await apiService.login(email, password, twoFactorCode: code);
+          await apiService.login(email, password, twoFactorCode: code, rememberMe: _rememberMe);
           await _onLoginSuccess(ref, email);
         } on DioException catch (e2) {
           if (mounted) {
@@ -84,6 +87,59 @@ class _LoginViewState extends State<_LoginView> {
     } finally {
       if (mounted) {
         setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _handleBiometricLogin(WidgetRef ref) async {
+    final apiService = ref.read(apiServiceProvider);
+
+    // Face ID/parmak izi yeni bir oturum yaratmaz — cihazda "Oturumu açık
+    // tut" ile bırakılmış, hâlâ geçerli bir refresh token varsa şifre
+    // yeniden sorulmadan onu açar. Öyle bir oturum yoksa normal girişe
+    // yönlendiriyoruz.
+    final hasSession = await apiService.hasRememberedSession();
+    if (!hasSession) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Face ID ile devam etmek için önce "Oturumu açık tut" seçeneğiyle bir kez giriş yapmalısınız.'),
+        ));
+      }
+      return;
+    }
+
+    final localAuth = LocalAuthentication();
+    try {
+      final supported = await localAuth.isDeviceSupported();
+      if (!supported) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Bu cihazda biyometrik kimlik doğrulama desteklenmiyor.'),
+          ));
+        }
+        return;
+      }
+
+      final authenticated = await localAuth.authenticate(
+        localizedReason: 'AETHER hesabınızın kilidini açmak için kimliğinizi doğrulayın',
+        options: const AuthenticationOptions(stickyAuth: true),
+      );
+      if (authenticated) {
+        ref.read(authStateProvider.notifier).setAuthState(AuthState.app);
+      }
+    } on PlatformException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Biyometrik doğrulama başarısız: ${e.message ?? e.code}')),
+        );
+      }
+    } catch (_) {
+      // Desktop gibi local_auth'un desteklemediği platformlarda plugin
+      // implementasyonu bulunamaz — kullanıcıyı normal girişe yönlendir.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Bu cihazda Face ID/parmak izi kullanılamıyor.'),
+        ));
       }
     }
   }
@@ -172,13 +228,31 @@ class _LoginViewState extends State<_LoginView> {
                   color: AppColors.text3, size: 18),
                 onPressed: () => setState(() => _showPw = !_showPw),
               )),
-            const SizedBox(height: 8),
-            Align(alignment: Alignment.centerRight,
-              child: TextButton(
+            const SizedBox(height: 10),
+            Row(children: [
+              GestureDetector(
+                onTap: () => setState(() => _rememberMe = !_rememberMe),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  AnimatedContainer(duration: const Duration(milliseconds: 150),
+                    width: 18, height: 18,
+                    decoration: BoxDecoration(
+                      color: _rememberMe ? AppColors.accent : const Color(0x07FFFFFF),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: _rememberMe ? AppColors.accent : AppColors.hairlineStrong, width: 0.5),
+                    ),
+                    child: _rememberMe ? const Icon(Icons.check, color: Colors.white, size: 12) : null),
+                  const SizedBox(width: 8),
+                  Text('Oturumu açık tut', style: GoogleFonts.spaceGrotesk(
+                    fontSize: 12.5, fontWeight: FontWeight.w500, color: AppColors.text2)),
+                ]),
+              ),
+              const Spacer(),
+              TextButton(
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
                 child: Text('Şifremi Unuttum?', style: GoogleFonts.spaceGrotesk(
-                  fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.text2)))),
-            const SizedBox(height: 10),
+                  fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.text2))),
+            ]),
+            const SizedBox(height: 4),
             _PrimaryButton(
               label: 'Giriş Yap',
               loading: _loading,
@@ -196,7 +270,7 @@ class _LoginViewState extends State<_LoginView> {
             _SecondaryButton(
               icon: const Icon(Icons.face_retouching_natural, size: 18, color: AppColors.text1),
               label: 'Face ID ile devam et',
-              onTap: () {},
+              onTap: () => _handleBiometricLogin(ref),
             ),
             const SizedBox(height: 48),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
