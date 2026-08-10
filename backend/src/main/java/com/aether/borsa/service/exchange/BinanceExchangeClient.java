@@ -160,7 +160,12 @@ public class BinanceExchangeClient implements IExchangeClient {
     }
 
     private String spotBaseUrl() {
-        return useSandbox ? "https://testnet.binance.vision" : "https://api.binance.com";
+        // NOT: Binance'in yeni "Demo Trading" ürünü (demo.binance.com'dan
+        // oluşturulan key'ler) eski geliştirici testnet'inden (testnet.
+        // binance.vision) FARKLI bir altyapı/key kaydı kullanıyor — demo-api.
+        // binance.com. testnet.binance.vision'a gönderilirse Demo Trading
+        // key'i "Invalid Api-Key ID" ile reddedilir.
+        return useSandbox ? "https://demo-api.binance.com" : "https://api.binance.com";
     }
 
     @Override
@@ -286,7 +291,9 @@ public class BinanceExchangeClient implements IExchangeClient {
     // HMAC-SHA256, X-MBX-APIKEY header) uygulanıyor. ──────────────────────
 
     private String futuresBaseUrl() {
-        return useSandbox ? "https://testnet.binancefuture.com" : "https://fapi.binance.com";
+        // Aynı not: Demo Trading futures key'leri testnet.binancefuture.com
+        // değil, demo-fapi.binance.com'da kayıtlı.
+        return useSandbox ? "https://demo-fapi.binance.com" : "https://fapi.binance.com";
     }
 
     @Override

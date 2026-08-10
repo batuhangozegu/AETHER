@@ -65,6 +65,12 @@ services:
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
       JWT_REMEMBER_ME_REFRESH_EXPIRATION: ${JWT_REMEMBER_ME_REFRESH_EXPIRATION:-2592000000}
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      # Borsa sandbox/demo modları — varsayılan mainnet (false). Binance
+      # "Demo Trading" (demo.binance.com) key kullanmak için true yap.
+      BINANCE_USE_SANDBOX: ${BINANCE_USE_SANDBOX:-false}
+      BYBIT_USE_TESTNET: ${BYBIT_USE_TESTNET:-false}
+      OKX_USE_SANDBOX: ${OKX_USE_SANDBOX:-false}
+      BINGX_USE_SANDBOX: ${BINGX_USE_SANDBOX:-false}
       # Spring profil
       SPRING_PROFILES_ACTIVE: prod
     depends_on:

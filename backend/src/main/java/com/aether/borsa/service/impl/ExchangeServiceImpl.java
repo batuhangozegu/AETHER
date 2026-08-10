@@ -30,20 +30,9 @@ public class ExchangeServiceImpl implements ExchangeService {
             throw new RuntimeException("Bu borsa bağlantısına erişim yetkiniz yok.");
         }
 
-        try {
-
-            String apiKey = encryptionUtil.decrypt(exchangeKey.getEncryptedApiKey());
-            String secretKey = encryptionUtil.decrypt(exchangeKey.getEncryptedSecretKey());
-            String passphrase = exchangeKey.getEncryptedPassphrase() != null
-                    ? encryptionUtil.decrypt(exchangeKey.getEncryptedPassphrase())
-                    : null;
-
-            IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
-            return client.getBalance(apiKey, secretKey, passphrase, asset);
-        } catch (Exception e){
-            throw new RuntimeException("Şifre çözme işlemi başarısız:" + e.getMessage());
-        }
-
+        DecryptedCredentials creds = decryptCredentials(exchangeKey);
+        IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
+        return client.getBalance(creds.apiKey(), creds.secretKey(), creds.passphrase(), asset);
     }
 
     @Override
@@ -54,21 +43,36 @@ public class ExchangeServiceImpl implements ExchangeService {
         if(!exchangeKey.getUser().getId().equals(userId)){
             throw new RuntimeException("Bu borsa bağlantısına erişim yetkiniz yok.");
         }
-        try {
 
+        DecryptedCredentials creds = decryptCredentials(exchangeKey);
+        IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
+        return client.getAllBalances(creds.apiKey(), creds.secretKey(), creds.passphrase());
+    }
+
+    /**
+     * Şifre çözme (AES) ile asıl borsa API çağrısını ayrı hata alanlarında
+     * tutar. Eskiden ikisi aynı try/catch içindeydi ve hangisi patlarsa
+     * patlasın kullanıcıya hep "Şifre çözme işlemi başarısız" gösteriliyordu
+     * — yanlış API anahtarı/IP whitelist/imza gibi gerçek borsa hatalarını da
+     * şifreleme sorunuymuş gibi maskeliyordu. Şifre çözme burada gerçekten
+     * patlarsa (örn. encryption.secret-key kayıt anındakinden farklı), sebep
+     * aynı kalıyor ama kullanıcıya somut bir aksiyon öneriliyor.
+     */
+    private DecryptedCredentials decryptCredentials(ExchangeKey exchangeKey) {
+        try {
             String apiKey = encryptionUtil.decrypt(exchangeKey.getEncryptedApiKey());
             String secretKey = encryptionUtil.decrypt(exchangeKey.getEncryptedSecretKey());
             String passphrase = exchangeKey.getEncryptedPassphrase() != null
                     ? encryptionUtil.decrypt(exchangeKey.getEncryptedPassphrase())
                     : null;
-
-            IExchangeClient client = exchangeClientFactory.getClient(exchangeKey.getExchangeName());
-
-
-            return client.getAllBalances(apiKey, secretKey, passphrase);
-
-        }catch (Exception e){
-            throw new RuntimeException("Şifre çözme işlemi başarısız:" + e.getMessage());
+            return new DecryptedCredentials(apiKey, secretKey, passphrase);
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Şifre çözme işlemi başarısız — bu API anahtarı, sunucudaki şifreleme " +
+                    "anahtarı (ENCRYPTION_SECRET_KEY) değiştikten önce kaydedilmiş olabilir. " +
+                    "Borsa anahtarını silip yeniden ekleyin.");
         }
     }
+
+    private record DecryptedCredentials(String apiKey, String secretKey, String passphrase) {}
 }

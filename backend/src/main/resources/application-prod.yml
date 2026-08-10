@@ -42,11 +42,14 @@ encryption:
   secret-key: ${ENCRYPTION_SECRET_KEY}
 
 exchange:
+  # Varsayılan mainnet (false) — Dokploy'da BINANCE_USE_SANDBOX=true set
+  # edilirse Binance "Demo Trading" hesabındaki key'ler kullanılabilir
+  # (bkz. BinanceExchangeClient.spotBaseUrl/futuresBaseUrl).
   binance:
-    use-sandbox: false
+    use-sandbox: ${BINANCE_USE_SANDBOX:false}
   bybit:
-    use-testnet: false
+    use-testnet: ${BYBIT_USE_TESTNET:false}
   okx:
-    use-sandbox: false
+    use-sandbox: ${OKX_USE_SANDBOX:false}
   bingx:
-    use-sandbox: false
+    use-sandbox: ${BINGX_USE_SANDBOX:false}
