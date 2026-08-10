@@ -74,6 +74,7 @@ services:
         condition: service_healthy
     networks:
       - aether_net
+      - dokploy-network   # Dokploy'un Traefik'i sadece bu ağdaki container'ları görür
 
 # ── Kalıcı Veriler ──────────────────────────────────────────────────────────
 volumes:
@@ -84,3 +85,9 @@ volumes:
 networks:
   aether_net:
     driver: bridge
+  # Dokploy tarafından oluşturulan paylaşımlı ağ; Traefik reverse proxy
+  # sadece bu ağa bağlı container'lara domain üzerinden yönlendirme yapabilir.
+  # "external: true" → biz oluşturmuyoruz, Dokploy'un sunucuda zaten
+  # oluşturduğu ağa bağlanıyoruz.
+  dokploy-network:
+    external: true

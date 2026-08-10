@@ -49,8 +49,33 @@ public class BinanceExchangeClient implements IExchangeClient {
     // değişmez).
     private final Map<String, BigDecimal[]> symbolFilterCache = new ConcurrentHashMap<>();
 
+    // API key gerektirmeyen (herkese açık market verisi) çağrılar için tek
+    // bir Exchange nesnesi — önceden her getCurrentPrice/getTickerInfo
+    // çağrısında yeniden oluşturuluyordu, bu da XChange'in "remoteInit"
+    // adımını (Binance'ten exchangeInfo indirme) her 5 saniyelik fiyat
+    // döngüsünde sembol başına tekrar tetikliyordu (log spam'i + gereksiz
+    // Binance isteği + rate-limit/IP ban riski). Kimlik bilgisi gerektiren
+    // çağrılar (bakiye, emir) kullanıcıya özel key'lerle çalıştığı için
+    // burada önbelleklenmiyor, createExchange(apiKey, secretKey) ile ayrı
+    // oluşturulmaya devam ediyor.
+    private volatile Exchange publicExchange;
+
     public BinanceExchangeClient(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
+    }
+
+    private Exchange getPublicExchange() {
+        Exchange exchange = publicExchange;
+        if (exchange == null) {
+            synchronized (this) {
+                exchange = publicExchange;
+                if (exchange == null) {
+                    exchange = createExchange(null, null);
+                    publicExchange = exchange;
+                }
+            }
+        }
+        return exchange;
     }
 
     @Override
@@ -62,7 +87,7 @@ public class BinanceExchangeClient implements IExchangeClient {
     @Override
     public BigDecimal getCurrentPrice(String symbol) {
         try {
-            Exchange exchange = createExchange(null, null);
+            Exchange exchange = getPublicExchange();
 
             CurrencyPair pair = parseSymbol(symbol);
             Ticker ticker = exchange.getMarketDataService().getTicker(pair);
@@ -119,7 +144,7 @@ public class BinanceExchangeClient implements IExchangeClient {
     @Override
     public TickerInfo getTickerInfo(String symbol) {
         try {
-            Exchange exchange = createExchange(null, null);
+            Exchange exchange = getPublicExchange();
 
             CurrencyPair pair = parseSymbol(symbol);
             Ticker ticker = exchange.getMarketDataService().getTicker(pair);
