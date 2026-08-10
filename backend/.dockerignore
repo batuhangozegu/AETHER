@@ -1,0 +1,19 @@
+# Maven build çıktısı (kendi içinde build ediyor, gerek yok)
+target/
+
+# Geliştirici IDE dosyaları
+.idea/
+*.iml
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Yerel development konfigürasyonu — prodüksiyonda env variable kullanılır
+src/main/resources/application-local.yml
+src/main/resources/application-example.yml
+
+# README ve diğer dökümantasyon
+HELP.md
+README.md
