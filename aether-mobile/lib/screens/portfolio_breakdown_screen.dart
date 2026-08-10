@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/delta_pill.dart';
+import 'dashboard_screen.dart' show friendlyErrorMessage;
 
 // ── Renk paleti ──────────────────────────────────────────────────────────
 const _kColors = [
@@ -25,18 +26,16 @@ const _kColors = [
 
 // ── Provider ────────────────────────────────────────────────────────────
 /// GET /api/v1/portfolio/breakdown?exchangeKeyId=
-/// Exchange key yoksa boş liste döner.
+/// Exchange key yoksa boş liste döner. Fetch hatası artık sessizce boş
+/// listeye düşürülmüyor — AsyncError olarak yukarı taşınıp aşağıdaki
+/// "Veri alınamadı: $e" UI'ında gösteriliyor.
 final breakdownProvider = FutureProvider<List<AssetAllocation>>((ref) async {
   final apiService = ref.watch(apiServiceProvider);
   final keys = ref.watch(apiKeysProvider).valueOrNull ?? [];
 
   if (keys.isEmpty) return [];
 
-  try {
-    return await apiService.getPortfolioBreakdown(keys.first.id);
-  } catch (_) {
-    return [];
-  }
+  return await apiService.getPortfolioBreakdown(keys.first.id);
 });
 
 // ── Screen ───────────────────────────────────────────────────────────────
@@ -95,8 +94,21 @@ class PortfolioBreakdownScreen extends ConsumerWidget {
                     error: (e, _) => Center(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 40),
-                        child: Text('Veri alınamadı: $e',
-                            style: const TextStyle(color: AppColors.loss)),
+                        child: Column(
+                          children: [
+                            Text('Veri alınamadı: ${friendlyErrorMessage(e)}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppColors.loss)),
+                            const SizedBox(height: 8),
+                            GestureDetector(
+                              onTap: () => ref.invalidate(breakdownProvider),
+                              child: Text('Tekrar dene',
+                                  style: GoogleFonts.spaceGrotesk(
+                                      fontSize: 12, color: AppColors.accent,
+                                      fontWeight: FontWeight.w500)),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     data: (allocations) {

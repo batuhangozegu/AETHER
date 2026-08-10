@@ -1,5 +1,6 @@
 package com.aether.borsa.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -17,6 +18,7 @@ import java.util.NoSuchElementException;
  * Refactored with AI assistance to cover validation, authorization, and not-found cases.
  */
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -64,6 +66,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
+        log.warn("Unhandled RuntimeException: {}", ex.getMessage(), ex);
         Map<String, String> error = new HashMap<>();
         error.put("error", ex.getMessage() != null ? ex.getMessage() : "An unexpected error occurred.");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
@@ -71,6 +74,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGenericException(Exception ex) {
+        log.error("Unhandled exception", ex);
         Map<String, String> error = new HashMap<>();
         error.put("error", "Internal server error. Please try again later.");
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);

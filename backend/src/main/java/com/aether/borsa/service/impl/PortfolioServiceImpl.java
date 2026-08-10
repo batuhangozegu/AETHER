@@ -15,19 +15,21 @@ import com.aether.borsa.service.PortfolioService;
 import com.aether.borsa.service.exchange.ExchangeClientFactory;
 import com.aether.borsa.service.exchange.IExchangeClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PortfolioServiceImpl implements PortfolioService {
 
     private final OrderRepository orderRepository;
@@ -110,11 +112,19 @@ public class PortfolioServiceImpl implements PortfolioService {
     }
 
     private Map<String, BigDecimal> usdValuesByAsset(Map<String, BigDecimal> balances, IExchangeClient client) {
-        return balances.entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        entry -> getUsdValue(entry.getKey(), entry.getValue(), client)
-                ));
+        // Bir varlığın (dust bakiye, delisted/futures-only coin vb.) USDT paritesi
+        // yoksa client.getCurrentPrice fırlatabilir — bu tek varlık yüzünden
+        // tüm portfolio summary/breakdown'ın çökmesini (ve mobile'da "boş cüzdan"
+        // gibi görünmesini) engellemek için o varlığı atlayıp devam ediyoruz.
+        Map<String, BigDecimal> result = new LinkedHashMap<>();
+        for (Map.Entry<String, BigDecimal> entry : balances.entrySet()) {
+            try {
+                result.put(entry.getKey(), getUsdValue(entry.getKey(), entry.getValue(), client));
+            } catch (Exception e) {
+                log.warn("Could not price asset {} for USD value, skipping: {}", entry.getKey(), e.getMessage());
+            }
+        }
+        return result;
     }
 
     private BigDecimal totalUsdValue(Map<String, BigDecimal> usdValues) {

@@ -1,4 +1,5 @@
 // lib/screens/dashboard_screen.dart
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,9 +18,24 @@ import 'profile_screen.dart';
 
 // ── Providers ──────────────────────────────────────────────────────────
 
+/// Backend'den (ya da Dio'dan) gelen hatayı kullanıcıya gösterilebilecek
+/// kısa bir metne çevirir — hata daha önce burada sessizce yutulup
+/// bakiye $0.00 gibi gösteriliyordu, bu artık gerçek nedeni yüzeye çıkarıyor.
+String friendlyErrorMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map && data['error'] is String) return data['error'] as String;
+    if (error.response != null) return 'Sunucu hatası (${error.response!.statusCode})';
+    return 'Bağlantı hatası: ${error.message ?? error.type.name}';
+  }
+  return error.toString();
+}
+
 /// İlk exchange key'in portfolio summary'sini çeker.
 /// GET /api/v1/portfolio/summary?exchangeKeyId=
-/// Exchange key yoksa sıfır portfolio döner.
+/// Exchange key yoksa sıfır portfolio döner; fetch hatası artık
+/// sessizce $0'a düşürülmüyor, AsyncError olarak yukarı taşınıyor ki
+/// UI gerçek hatayı gösterebilsin.
 final realPortfolioProvider = FutureProvider<Portfolio>((ref) async {
   final apiService = ref.watch(apiServiceProvider);
   final keysAsync  = ref.watch(apiKeysProvider);
@@ -29,20 +45,7 @@ final realPortfolioProvider = FutureProvider<Portfolio>((ref) async {
     return const Portfolio(balance: 0, pnl24h: 0, pnl24hPercent: 0);
   }
 
-  // İlk aktif key'i kullan; hata olursa exchange balance fallback
-  try {
-    return await apiService.getPortfolioSummary(keys.first.id);
-  } catch (_) {
-    // Portfolio summary başarısız olursa bakiye-only fallback
-    double total = 0;
-    for (final key in keys) {
-      try {
-        final bal = await apiService.getExchangeBalance(key.id, 'USDT');
-        total += bal;
-      } catch (_) {}
-    }
-    return Portfolio(balance: total, pnl24h: 0, pnl24hPercent: 0);
-  }
+  return await apiService.getPortfolioSummary(keys.first.id);
 });
 
 // ── Screen ─────────────────────────────────────────────────────────────
@@ -264,26 +267,53 @@ class DashboardScreen extends ConsumerWidget {
                   child:
                       CircularProgressIndicator(color: AppColors.accent)),
             ),
-            error: (e, _) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('\$0.00',
-                    style: AppTheme.mono(fontSize: 42, fontWeight: FontWeight.w500)),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const ProfileScreen())),
-                  child: Row(children: [
-                    const Icon(Icons.add_circle_outline, color: AppColors.accent, size: 14),
-                    const SizedBox(width: 6),
-                    Text('Exchange API anahtarı ekle',
-                        style: GoogleFonts.spaceGrotesk(
-                            fontSize: 12, color: AppColors.accent,
-                            fontWeight: FontWeight.w500)),
-                  ]),
-                ),
-              ],
-            ),
+            error: (e, _) {
+              final hasKeys =
+                  (ref.watch(apiKeysProvider).valueOrNull ?? []).isNotEmpty;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('\$0.00',
+                      style: AppTheme.mono(fontSize: 42, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  if (hasKeys) ...[
+                    // Key eklenmiş ama bakiye çekilemedi — bunu "key ekle"
+                    // ile karıştırmamak lazım, gerçek hatayı göster.
+                    Row(children: [
+                      const Icon(Icons.error_outline, color: AppColors.loss, size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text('Bakiye alınamadı: ${friendlyErrorMessage(e)}',
+                            style: GoogleFonts.spaceGrotesk(
+                                fontSize: 12, color: AppColors.loss,
+                                fontWeight: FontWeight.w500),
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                      ),
+                    ]),
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: () => ref.invalidate(realPortfolioProvider),
+                      child: Text('Tekrar dene',
+                          style: GoogleFonts.spaceGrotesk(
+                              fontSize: 12, color: AppColors.accent,
+                              fontWeight: FontWeight.w500)),
+                    ),
+                  ] else
+                    GestureDetector(
+                      onTap: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const ProfileScreen())),
+                      child: Row(children: [
+                        const Icon(Icons.add_circle_outline, color: AppColors.accent, size: 14),
+                        const SizedBox(width: 6),
+                        Text('Exchange API anahtarı ekle',
+                            style: GoogleFonts.spaceGrotesk(
+                                fontSize: 12, color: AppColors.accent,
+                                fontWeight: FontWeight.w500)),
+                      ]),
+                    ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 28),
         ],
