@@ -1,6 +1,5 @@
 # AETHER — Kripto Risk Yönetimi ve Portföy Yönetim Platformu
 
-> 📌 **Portfolio Project** — This repository is public for review purposes only. Please do not fork or use the code in your own projects.
 
 AETHER, kullanıcı ile kripto para borsaları arasında konumlanan akıllı bir backend platformudur.
 Her emirden önce matematiksel risk hesaplaması yaparak duygusal kararların önüne geçer.
