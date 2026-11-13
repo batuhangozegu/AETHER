@@ -1,5 +1,18 @@
 # AETHER — Kripto Risk Yönetimi ve Portföy Yönetim Platformu
 
+> **📌 Durum: v1 tamamlandı, aktif geliştirme durduruldu.**
+>
+> Bu repo AETHER'in ilk sürümüdür (Java/Spring Boot + Flutter) ve olduğu gibi arşivlenmiştir.
+> **AETHER v2** ayrı bir proje olarak sıfırdan geliştirilecektir:
+>
+> - **Backend:** Go + Rust (hibrit mimari)
+> - **İstemciler:** Web + Mobil
+> - **Tasarım:** Tamamen yenilenmiş arayüz
+> - **Kapsam:** Daha detaylı risk yönetimi, piyasa verisi ve portföy analizi
+>
+> v1'deki API sözleşmesi, veritabanı şeması ve risk hesaplama kuralları v2'ye referans olarak taşınacaktır.
+> v2 reposu yayınlandığında bağlantısı buraya eklenecektir.
+
 
 AETHER, kullanıcı ile kripto para borsaları arasında konumlanan akıllı bir backend platformudur.
 Her emirden önce matematiksel risk hesaplaması yaparak duygusal kararların önüne geçer.
@@ -67,7 +80,9 @@ GET  /api/v1/portfolio/summary?exchangeKeyId=
 GET  /api/v1/portfolio/breakdown?exchangeKeyId=
 ```
 
-## Planlanan Özellikler (Sonraki Fazlar)
+## v1'de Yapılmayan Fazlar (v2 kapsamına taşındı)
+
+Aşağıdaki maddeler v1'de uygulanmayacak; v2 planlamasında girdi olarak kullanılacaktır.
 
 - **Faz 7 — Market Service**: coin listesi, mum verisi (klines), WebSocket + Redis canlı fiyat akışı
 - **Faz 8 — Refactor**: `UserLookupService` (user bulma tekrarını merkezileştirme), `PnLCalculator` (Trade + Portfolio impl'lerindeki duplicate calculatePnL'yi ortak utility'ye taşıma), `PortfolioServiceImpl.getBreakdown()` derleme hatası düzeltmesi
