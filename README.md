@@ -85,7 +85,7 @@ GET  /api/v1/portfolio/breakdown?exchangeKeyId=
 Aşağıdaki maddeler v1'de uygulanmayacak; v2 planlamasında girdi olarak kullanılacaktır.
 
 - **Faz 7 — Market Service**: coin listesi, mum verisi (klines), WebSocket + Redis canlı fiyat akışı
-- **Faz 8 — Refactor**: `UserLookupService` (user bulma tekrarını merkezileştirme), `PnLCalculator` (Trade + Portfolio impl'lerindeki duplicate calculatePnL'yi ortak utility'ye taşıma), `PortfolioServiceImpl.getBreakdown()` derleme hatası düzeltmesi
+- **Faz 8 — Refactor**: `UserLookupService` (user bulma tekrarını merkezileştirme), `PnLCalculator` (Trade + Portfolio impl'lerindeki duplicate calculatePnL'yi ortak utility'ye taşıma)
 - Bildirim sistemi
 - İki faktörlü doğrulama (2FA) — backend servisi hazır, mobil entegrasyon bekliyor
 
