@@ -3,15 +3,15 @@
 > **📌 Durum: v1 tamamlandı, aktif geliştirme durduruldu.**
 >
 > Bu repo AETHER'in ilk sürümüdür (Java/Spring Boot + Flutter) ve olduğu gibi arşivlenmiştir.
-> **AETHER v2** ayrı bir proje olarak sıfırdan geliştirilecektir:
+> Projenin devamı **[Metron](https://github.com/batuhangozegu/Metron)** adıyla ayrı bir proje olarak sıfırdan geliştirilmektedir (eski adıyla AETHER v2):
 >
 > - **Backend:** Go + Rust (hibrit mimari)
-> - **İstemciler:** Web + Mobil
+> - **İstemciler:** Web (Next.js) + Mobil (Flutter)
 > - **Tasarım:** Tamamen yenilenmiş arayüz
 > - **Kapsam:** Daha detaylı risk yönetimi, piyasa verisi ve portföy analizi
 >
 > v1'deki API sözleşmesi, veritabanı şeması ve risk hesaplama kuralları v2'ye referans olarak taşınacaktır.
-> v2 reposu yayınlandığında bağlantısı buraya eklenecektir.
+> Metron reposu: https://github.com/batuhangozegu/Metron
 
 
 AETHER, kullanıcı ile kripto para borsaları arasında konumlanan akıllı bir backend platformudur.
